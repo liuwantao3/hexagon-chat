@@ -24,18 +24,6 @@
 - 聊天
 - 商业 LLMs API 密钥管理
 
-## 加入我们的社区
-
-如果您是用户、贡献者或只是对 `Hexagon` 感兴趣的人，您都欢迎加入我们的 Discord 社群，点击以下链接邀请链接 [https://discord.gg/TjhZGYv5pC](https://discord.gg/TjhZGYv5pC)。
-
-如果您是贡献者，请关注频道 `technical-discussion`，讨论技术相关问题。
-
-如果您在使用 `Hexagon` 遇到问题，请报告到频道 `customer-support`。我们将尽快帮助您解决问题。
-
-## 快速启动
-
-作为 `Hexagon` 的用户，请按照以下文档步骤，确保您从头到尾了解了所有组件的设置，然后才能使用 `Hexagon`。
-
 ### 支持的向量数据库
 
 `Hexagon` 支持 2 种向量数据库：Milvus 和 Chroma。

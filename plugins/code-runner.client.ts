@@ -52,11 +52,31 @@ export default defineNuxtPlugin(() => {
     // Check if runner already exists
     const existingRunner = block.parentElement?.querySelector(`.code-runner-container[data-cell-id="${cellId}"]`)
     if (existingRunner) {
-      // Re-run the code
-      const iframe = existingRunner.querySelector('iframe') as HTMLIFrameElement
-      if (iframe) {
-        executeInIframe(iframe, code, language, cellId)
+      // Clear console and re-run by recreating the iframe to reset all state
+      const consoleContent = existingRunner.querySelector('.console-content') as HTMLElement
+      if (consoleContent) {
+        consoleContent.innerHTML = ''
       }
+      const consoleOutput = existingRunner.querySelector('.console-output') as HTMLElement
+      if (consoleOutput) {
+        consoleOutput.style.display = 'none'
+      }
+      const clearBtn = existingRunner.querySelector('.clear-btn') as HTMLButtonElement
+      if (clearBtn) {
+        clearBtn.style.display = 'none'
+      }
+      
+      // Remove old iframe and create new one to reset all state (including imported libraries)
+      const oldIframe = existingRunner.querySelector('iframe')
+      if (oldIframe) {
+        oldIframe.remove()
+      }
+      const newIframe = document.createElement('iframe')
+      newIframe.style.cssText = 'width: 100%; height: 400px; border: none; background: white;'
+      newIframe.setAttribute('sandbox', 'allow-scripts allow-same-origin')
+      newIframe.setAttribute('title', 'Code Execution')
+      existingRunner.insertBefore(newIframe, existingRunner.children[1])
+      executeInIframe(newIframe, code, language, cellId)
       return
     }
 
@@ -70,16 +90,12 @@ export default defineNuxtPlugin(() => {
     const toolbar = document.createElement('div')
     toolbar.style.cssText = 'display: flex; gap: 8px; padding: 8px 12px; background: #f5f5f5; border-bottom: 1px solid #e5e7eb;'
     
-    const runBtn = document.createElement('button')
-    runBtn.textContent = 'Run Code'
-    runBtn.style.cssText = 'padding: 4px 12px; font-size: 12px; font-weight: 500; color: #fff; background: #22c55e; border: none; border-radius: 4px; cursor: pointer;'
-    
     const clearBtn = document.createElement('button')
+    clearBtn.className = 'clear-btn'
     clearBtn.textContent = 'Clear'
     clearBtn.style.cssText = 'padding: 4px 12px; font-size: 12px; font-weight: 500; color: #666; background: #e5e7eb; border: none; border-radius: 4px; cursor: pointer; display: none;'
     clearBtn.style.display = 'none'
 
-    toolbar.appendChild(runBtn)
     toolbar.appendChild(clearBtn)
 
     // Create iframe
@@ -90,6 +106,7 @@ export default defineNuxtPlugin(() => {
 
     // Create console output
     const consoleOutput = document.createElement('div')
+    consoleOutput.className = 'console-output'
     consoleOutput.style.cssText = 'border-top: 1px solid #e5e7eb; background: #1e1e1e; max-height: 200px; overflow-y: auto; display: none;'
     
     const consoleHeader = document.createElement('div')
@@ -97,6 +114,7 @@ export default defineNuxtPlugin(() => {
     consoleHeader.style.cssText = 'padding: 4px 12px; font-size: 12px; font-weight: 600; color: #888; background: #2d2d2d; text-transform: uppercase; letter-spacing: 0.5px;'
     
     const consoleContent = document.createElement('div')
+    consoleContent.className = 'console-content'
     consoleContent.style.cssText = 'padding: 8px 12px; font-family: "SF Mono", Monaco, Inconsolata, "Fira Mono", monospace; font-size: 13px; line-height: 1.5;'
     
     consoleOutput.appendChild(consoleHeader)
@@ -125,14 +143,6 @@ export default defineNuxtPlugin(() => {
     }
 
     window.addEventListener('message', messageHandler)
-
-    // Run button handler
-    runBtn.addEventListener('click', () => {
-      consoleContent.innerHTML = ''
-      consoleOutput.style.display = 'none'
-      clearBtn.style.display = 'none'
-      executeInIframe(iframe, code, language, cellId)
-    })
 
     // Clear button handler
     clearBtn.addEventListener('click', () => {
