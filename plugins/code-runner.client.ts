@@ -190,11 +190,11 @@ ${code}
     iframeDoc.close()
   }
 
-  // Handle clicks on run buttons
+  // Handle clicks on run buttons and fold buttons
   const handleClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement
-    const runBtn = target.closest('.run-code-btn') as HTMLElement
     
+    const runBtn = target.closest('.run-code-btn') as HTMLElement
     if (runBtn) {
       const cellId = runBtn.dataset.cellId
       if (cellId) {
@@ -202,6 +202,29 @@ ${code}
         if (sourceCode) {
           expandedBlocks.add(cellId)
           runCode(cellId, sourceCode.content, sourceCode.language)
+        }
+      }
+      return
+    }
+    
+    const foldBtn = target.closest('.fold-code-btn') as HTMLElement
+    if (foldBtn) {
+      const cellId = foldBtn.dataset.cellId
+      if (cellId) {
+        const codeBlock = document.querySelector(`.executable-code-block[data-cell-id="${cellId}"]`)
+        if (codeBlock) {
+          const codeContent = codeBlock.querySelector('.code-content') as HTMLElement
+          const isFolded = codeContent.style.display === 'none'
+          codeContent.style.display = isFolded ? 'block' : 'none'
+          
+          const icon = foldBtn.querySelector('svg')
+          if (icon) {
+            if (isFolded) {
+              icon.innerHTML = '<polyline points="18 15 12 9 6 15"></polyline>'
+            } else {
+              icon.innerHTML = '<polyline points="6 9 12 15 18 9"></polyline>'
+            }
+          }
         }
       }
     }

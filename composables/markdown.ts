@@ -119,11 +119,16 @@ export function useMarkdown() {
       return `<div class="executable-code-block" data-cell-id="${cellId}" style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin: 8px 0; background: #fafafa;">
         <div class="code-block-header" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb;">
           <span class="language-badge" style="font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">${language}</span>
-          <button class="run-code-btn" data-cell-id="${cellId}" style="padding: 4px 8px; font-size: 12px; font-weight: 500; color: #6b7280; background: transparent; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-          </button>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <button class="fold-code-btn" data-cell-id="${cellId}" style="padding: 4px 8px; font-size: 12px; font-weight: 500; color: #6b7280; background: transparent; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; display: flex; align-items: center;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <button class="run-code-btn" data-cell-id="${cellId}" style="padding: 4px 8px; font-size: 12px; font-weight: 500; color: #6b7280; background: transparent; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+          </div>
         </div>
-        <pre style="margin: 0; padding: 12px; overflow-x: auto; background: #fafafa;"><code class="hljs language-${language}" style="font-family: 'SF Mono', Monaco, Inconsolata, 'Fira Mono', monospace; font-size: 13px; line-height: 1.5; color: #374151;">${highlighted}</code></pre>
+        <pre class="code-content" data-cell-id="${cellId}" style="margin: 0; padding: 12px; overflow-x: auto; background: #fafafa;"><code class="hljs language-${language}" style="font-family: 'SF Mono', Monaco, Inconsolata, 'Fira Mono', monospace; font-size: 13px; line-height: 1.5; color: #374151;">${highlighted}</code></pre>
       </div>`
     }
 
