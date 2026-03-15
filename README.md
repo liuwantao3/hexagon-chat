@@ -23,14 +23,6 @@ English | [简体中文](README.zh-Hans.md)
 - Chat
 - Commercial LLMs API keys management
 
-## Join Our Community
-
-If you are a user, contributor, or even just new to `Hexagon`, you are more than welcome to join our community on Discord by clicking the [invite link](https://discord.gg/TjhZGYv5pC).
-
-If you are a contributor, the channel `technical-discussion` is for you, where we discuss technical stuff.
-
-If you have any issue in `Hexagon` usage, please report to channel `customer-support`. We will help you out as soon as we can.
-
 ## Quick Start
 
 As a user of `Hexagon`, please walk through the document below, to make sure you get all the components up and running before starting using `Hexagon`.
