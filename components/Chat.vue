@@ -21,10 +21,15 @@ const emits = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { chatModels } = useModels()
+const { chatModels, modelSupportsVision } = useModels()
 const modal = useModal()
 const { onReceivedMessage, sendMessage } = useChatWorker()
-const { data } = useAuth() // Access the data property from useAuth
+const { data } = useAuth()
+
+const supportsVision = computed(() => {
+  if (models.value.length === 0) return false
+  return modelSupportsVision(models.value[0])
+}) // Access the data property from useAuth
 
 const sessionInfo = ref<ChatSession>()
 const knowledgeBases: KnowledgeBase[] = []
@@ -325,7 +330,7 @@ async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
 }
 
 // Add near the top of the script section
-const isSessionListVisible = inject('isSessionListVisible', ref(true))
+
 </script>
 
 <template>
@@ -334,10 +339,6 @@ const isSessionListVisible = inject('isSessionListVisible', ref(true))
     <div class="flex flex-col flex-1 min-w-0">
       <div class="px-4 border-b border-gray-200 dark:border-gray-700 box-border h-[57px] flex items-center">
         <slot name="left-menu-btn"></slot>
-        <UIcon
-               :name="isSessionListVisible ? 'i-heroicons-chevron-double-left' : 'i-heroicons-chevron-double-right'"
-               class="mr-2 text-lg text-gray-500 hidden md:block cursor-pointer hover:text-primary-500"
-               @click="$emit('toggle-sidebar')" />
         <ChatConfigInfo v-if="instructionInfo" icon="i-iconoir-terminal"
                         :title="instructionInfo.name"
                         :description="instructionInfo.instruction"
@@ -362,7 +363,7 @@ const isSessionListVisible = inject('isSessionListVisible', ref(true))
       </div>
       <div class="shrink-0 p-4 border-t border-gray-200 dark:border-gray-800">
         <ChatInputBox ref="chatInputBoxRef"
-                      :disabled="models.length === 0" :loading="sendingCount > 0"
+                      :disabled="models.length === 0" :loading="sendingCount > 0" :supports-vision="supportsVision"
                       @submit="onSend" @stop="onAbortChat">
           <div class="text-muted flex">
             <div class="mr-4">

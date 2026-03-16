@@ -10,6 +10,7 @@ export interface ChatBoxFormData {
 const props = defineProps<{
     disabled?: boolean
     loading?: boolean
+    supportsVision?: boolean
 }>()
 
 const emits = defineEmits<{
@@ -106,6 +107,9 @@ function removeImage() {
                 <UButton @click="removeImage" class="absolute top-0 right-0 bg-gray-200 text-white p-1 hover:bg-gray-500">
                     <i class="material-icons">X</i>
                 </UButton>
+                <div v-if="!props.supportsVision" class="absolute bottom-0 left-0 right-0 bg-yellow-500/80 text-white text-xs p-1 rounded-b-lg text-center">
+                    {{ t('chat.imageNotSupported') }}
+                </div>
             </div>
             <div class="flex items-center">
                 <slot></slot>

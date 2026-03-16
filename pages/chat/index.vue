@@ -86,11 +86,10 @@ provide('isSessionListVisible', isSessionListVisible)
               @toggle-sidebar="toggleSidebar">
             <template #left-menu-btn>
                 <UButton
-                         :icon="isSessionListVisible ? 'i-material-symbols-lists-rounded' : 'i-heroicons-chevron-double-right'"
+                         :icon="isSessionListVisible ? 'i-heroicons-chevron-double-left' : 'i-heroicons-chevron-double-right'"
                          color="gray"
                          class="menu-button"
-                         :class="{ 'rotate-180': isSessionListVisible }"
-                         @click="onOpenSideMenu" />
+                         @click="toggleSidebar" />
             </template>
         </Chat>
         <div v-else class="new-chat">
@@ -141,10 +140,6 @@ provide('isSessionListVisible', isSessionListVisible)
 
 .menu-button {
     margin-right: 1rem;
-}
-
-.menu-button.rotate-180 {
-    transform: rotate(180deg);
 }
 
 .new-chat {

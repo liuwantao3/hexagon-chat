@@ -1,5 +1,5 @@
 import { useSessionStorage } from '@vueuse/core'
-import { MODEL_FAMILY_SEPARATOR } from '~/config'
+import { MODEL_FAMILY_SEPARATOR, MODEL_FAMILIES, VISION_MODELS } from '~/config'
 import type { ModelItem } from '~/server/api/models/index.get'
 import { useOpenAIModels } from '~/composables/useOpenAIModels'
 import { useStorage } from '@vueuse/core'
@@ -12,6 +12,15 @@ export interface ModelInfo {
   family?: string
   /** model name */
   name: string
+  /** whether this model supports image/vision input */
+  supportsVision?: boolean
+}
+
+function isVisionModel(name: string, family?: string): boolean {
+  if (!family) return false
+  const visionList = VISION_MODELS[family]
+  if (!visionList || visionList.length === 0) return false
+  return visionList.some(v => name.toLowerCase().includes(v.toLowerCase()))
 }
 
 interface Options {
@@ -41,6 +50,7 @@ export function useModels(options?: Options) {
         name: el.name!,
         family: el?.details?.family,
         value: [el?.details?.family || '', el.name!].join(MODEL_FAMILY_SEPARATOR),
+        supportsVision: isVisionModel(el.name!, el?.details?.family),
       }))
   })
 
@@ -49,6 +59,11 @@ export function useModels(options?: Options) {
       .filter(el => OLLAMA_EMBEDDING_FAMILY_LIST.includes(el?.details?.family) || embeddingRegExp.test(el.name!))
       .map(el => ({ label: el.name!, value: el.name!, family: el?.details?.family }))
   })
+
+  function modelSupportsVision(modelValue: string): boolean {
+    const { family, name } = parseModelValue(modelValue)
+    return isVisionModel(name, family)
+  }
 
   let controller: AbortController | undefined
   let f: ReturnType<typeof setTimeout> | null = null
@@ -102,7 +117,7 @@ export function useModels(options?: Options) {
     })
   }
 
-  return { models, chatModels, ollamaEmbeddingModels, loadModels, loading }
+  return { models, chatModels, ollamaEmbeddingModels, loadModels, loading, modelSupportsVision }
 }
 
 export function parseModelValue(val: string) {

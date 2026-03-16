@@ -84,6 +84,7 @@
     "enter": "Enter",
     "shiftEnter": "Shift + Enter",
     "saySomething": "Say something...",
+    "imageNotSupported": "Model does not support images",
     "chatSettingsTitle": "Current Chat Settings",
     "topic": "Topic",
     "model": "Model",

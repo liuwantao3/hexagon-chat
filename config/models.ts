@@ -82,3 +82,52 @@ export const GROQ_MODELS = [
   "gemma-7b-it",
   "gemma2-9b-it",
 ]
+
+export const VISION_MODELS: Record<string, string[]> = {
+  [MODEL_FAMILIES.openai]: [
+    'gpt-4o',
+    'gpt-4o-mini', 
+    'gpt-4o-2024-05-13',
+    'gpt-4-turbo',
+    'gpt-4-turbo-2024-04-09',
+    'gpt-4-vision-preview',
+  ],
+  [MODEL_FAMILIES.azureOpenai]: [
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4-turbo',
+  ],
+  [MODEL_FAMILIES.anthropic]: [
+    'claude-3-5-sonnet',
+    'claude-3-5-sonnet-latest',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-5-haiku',
+    'claude-3-5-haiku-latest',
+    'claude-3-5-haiku-20241022',
+    'claude-3-opus',
+    'claude-3-opus-20240229',
+    'claude-3-sonnet',
+    'claude-3-sonnet-20240229',
+    'claude-3-haiku',
+    'claude-3-haiku-20240307',
+  ],
+  [MODEL_FAMILIES.gemini]: [
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-exp',
+    'gemini-2.0-flash-lite-preview-02-05',
+    'gemini-2.0-pro-exp',
+    'gemini-2.0-flash-thinking-exp-01-21',
+    'gemini-2.0-flash-thinking-exp-1219',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
+    'gemini-1.5-pro',
+  ],
+  [MODEL_FAMILIES.groq]: [
+    'llama-3.1-70b-versatile',
+    'llama-3.1-8b-instant',
+    'llama3-8b-8192',
+    'llama3-70b-8192',
+  ],
+  [MODEL_FAMILIES.minimax]: [],
+  [MODEL_FAMILIES.moonshot]: [],
+}

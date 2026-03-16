@@ -65,6 +65,7 @@ function onChange(models: string[]) {
         <span>{{ option.family }}</span>
         <span class="text-muted">/</span>
         <span>{{ option.label }}</span>
+        <UIcon v-if="(option as ModelInfo).supportsVision" name="i-heroicons-photo" class="ml-1 text-primary-500" />
       </template>
     </USelectMenu>
   </ClientOnly>

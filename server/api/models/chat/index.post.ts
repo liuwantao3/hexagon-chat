@@ -18,6 +18,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 import { ChatOllama } from '@langchain/ollama'
 import { tool } from '@langchain/core/tools'
 import { BaseChatModel } from '@langchain/core/language_models/chat_models'
+import { transformImageContent } from '@/server/utils/transformImageContent'
 
 interface RequestBody {
     knowledgebaseId: number
@@ -207,18 +208,13 @@ export default defineEventHandler(async (event) => {
                 messages.map((message: RequestBody['messages'][number]) => {
                     let content: string | any[] = message.content
 
-                    // Check if message.content is an array
+                    // Check if message.content is an array (contains text and/or image)
                     if (Array.isArray(message.content)) {
+                        console.log("Transforming image content for family:", family)
                         try {
-                            const parsedContent = message.content.map((item) => {
-                                if (item.image_url) {
-                                    item.image_url = { url: item.image_url }
-                                }
-                                return item
-                            })
-                            content = parsedContent
+                            content = transformImageContent(message.content, family)
                         } catch (error) {
-                            console.log("Error parsing array content:", message.content)
+                            console.log("Error parsing array content:", message.content, error)
                         }
                     }
                     return [message.role, content]

@@ -84,6 +84,7 @@
     "enter": "回车",
     "shiftEnter": "Shift + 回车",
     "saySomething": "说点什么吧...",
+    "imageNotSupported": "当前模型不支持图片输入",
     "chatSettingsTitle": "当前聊天配置",
     "topic": "对话标题",
     "model": "模型",
