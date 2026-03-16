@@ -6,7 +6,7 @@ import { parseKnowledgeBaseFormRequest } from '@/server/utils/http'
 import { requireKnowledgeBase, requireKnowledgeBaseOwner } from '~/server/utils/knowledgeBase'
 
 export default defineEventHandler(async (event) => {
-  const { knowledgeBaseId, uploadedFiles, urls, name, description, isPublic } = await parseKnowledgeBaseFormRequest(event)
+  const { knowledgeBaseId, uploadedFiles, urls, name, description, isPublic, chunking } = await parseKnowledgeBaseFormRequest(event)
 
   console.log("Knowledge base ID: ", knowledgeBaseId)
 
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     console.log(`Update knowledge base ${knowledgeBase.name} with ID ${knowledgeBase.id}`)
 
     try {
-      await ingestDocument(uploadedFiles, `collection_${knowledgeBase.id}`, knowledgeBase.embedding!, event)
+      await ingestDocument(uploadedFiles, `collection_${knowledgeBase.id}`, knowledgeBase.embedding!, chunking, event)
       for (const uploadedFile of uploadedFiles) {
         const createdKnowledgeBaseFile = await prisma.knowledgeBaseFile.create({
           data: {
@@ -60,7 +60,17 @@ export default defineEventHandler(async (event) => {
 
   await prisma.knowledgeBase.update({
     where: { id: knowledgeBaseId! },
-    data: { name, description, is_public: isPublic }
+    data: {
+      name,
+      description,
+      is_public: isPublic,
+      parentChunkSize: chunking?.parentChunkSize,
+      parentChunkOverlap: chunking?.parentChunkOverlap,
+      childChunkSize: chunking?.childChunkSize,
+      childChunkOverlap: chunking?.childChunkOverlap,
+      parentK: chunking?.parentK,
+      childK: chunking?.childK,
+    }
   })
 
   return {
