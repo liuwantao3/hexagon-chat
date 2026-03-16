@@ -112,58 +112,16 @@ export default defineEventHandler(async (event) => {
         })
       })
     } else {
-      // Try to fetch from API
-      const minimaxEndpoint = keys.minimax.endpoint || 'https://api.minimax.chat'
-      let fetchedModels = false
-      
-      try {
-        const baseUrl = minimaxEndpoint.replace(/\/$/, '')
-        const modelsUrl = `${baseUrl}/v1/models`
-        console.log('Fetching MiniMax models from:', modelsUrl)
-        
-        const response = await fetch(modelsUrl, {
-          headers: {
-            'Authorization': `Bearer ${keys.minimax.key}`,
-            'Content-Type': 'application/json',
+      // MiniMax doesn't have a /v1/models endpoint, use fallback models directly
+      console.log('Using MiniMax fallback models (MiniMax API has no model listing endpoint)')
+      MINIMAX_MODELS.forEach((model) => {
+        models.push({
+          name: model,
+          details: {
+            family: MODEL_FAMILIES.minimax
           }
         })
-        
-        console.log('MiniMax response status:', response.status)
-        
-        if (response.ok) {
-          const data = await response.json()
-          console.log('MiniMax response data:', data)
-          if (data.data && Array.isArray(data.data)) {
-            fetchedModels = true
-            data.data.forEach((model: any) => {
-              models.push({
-                name: model.id,
-                details: {
-                  family: MODEL_FAMILIES.minimax
-                }
-              })
-            })
-          }
-        } else {
-          const errorText = await response.text()
-          console.error('Failed to fetch MiniMax models:', response.status, errorText)
-        }
-      } catch (error) {
-        console.error('Failed to fetch MiniMax models:', error)
-      }
-      
-      // Fallback to static models if API fails
-      if (!fetchedModels) {
-        console.log('Using MiniMax fallback models')
-        MINIMAX_MODELS.forEach((model) => {
-          models.push({
-            name: model,
-            details: {
-              family: MODEL_FAMILIES.minimax
-            }
-          })
-        })
-      }
+      })
     }
   }
 

@@ -1,10 +1,7 @@
-@import 'highlight.js/scss/github.scss';
-@import './markdown.scss';
-@import './katex.scss';
-
-.dark {
-  @import 'highlight.js/scss/github-dark.scss';
-}
+@use 'highlight.js/scss/github.scss';
+@use './markdown.scss';
+@use './katex.scss';
+@use 'highlight.js/scss/github-dark.scss';
 
 html,
 body,

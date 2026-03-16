@@ -6,6 +6,7 @@ import { type ChatBoxFormData } from '@/components/ChatInputBox.vue'
 import { type ChatSessionSettings } from '~/pages/chat/index.vue'
 import { ChatSettings } from '#components'
 import type { ChatMessage } from '~/types/chat'
+import { chatDefaultSettings } from '~/composables/store'
 
 type Instruction = Awaited<ReturnType<typeof loadOllamaInstructions>>[number]
 
@@ -69,7 +70,10 @@ const visibleMessages = computed(() => {
 })
 
 // Add new state for stripping <think> section
-const stripThinkSection = ref(false)
+const stripThinkSection = computed({
+  get: () => chatDefaultSettings.value.stripThinkSection,
+  set: (val) => { chatDefaultSettings.value.stripThinkSection = val },
+})
 
 // Method to toggle stripping <think> section
 const toggleStripThinkSection = () => {
