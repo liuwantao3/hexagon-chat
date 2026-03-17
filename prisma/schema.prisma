@@ -73,5 +73,6 @@ model Story {
   updated_at DateTime
   user_id    Int?
   length     String?
+  audio_path String?
   User       User?    @relation(fields: [user_id], references: [id])
 }
