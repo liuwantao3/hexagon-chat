@@ -25,6 +25,7 @@ model User {
   updated_at     DateTime? @updatedAt
 
   knowledgeBases KnowledgeBase[]
+  Story          Story[]
 }
 
 model KnowledgeBase {
@@ -57,4 +58,20 @@ model Instruction {
   id          Int    @id @default(autoincrement())
   name        String @unique
   instruction String
+}
+
+model Story {
+  id         Int      @id @default(autoincrement())
+  title      String
+  content    String
+  genre      String
+  topic      String
+  difficulty String
+  reference  String?
+  status     String   @default("draft")
+  created_at DateTime @default(now())
+  updated_at DateTime
+  user_id    Int?
+  length     String?
+  User       User?    @relation(fields: [user_id], references: [id])
 }

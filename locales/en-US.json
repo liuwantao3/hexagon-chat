@@ -1,9 +1,13 @@
 {
+  "common": {
+    "selectModel": "Select model"
+  },
   "menu": {
     "home": "Home",
     "models": "Models",
     "instructions": "Instructions",
     "knowledgeBases": "Knowledge Bases",
+    "stories": "Story Generator",
     "chat": "Chat",
     "realtime": "Realtime Chat",
     "settings": "Settings"
@@ -214,5 +218,56 @@
     "confirmTitle": "Confirm action",
     "add": "Add",
     "invalidUrl": "Invalid URL"
+  },
+  "stories": {
+    "generateTitle": "Generate New Story",
+    "generatedTitle": "Generated Story",
+    "savedStories": "Saved Stories",
+    "model": "Model",
+    "genre": "Genre",
+    "topic": "Topic",
+    "title": "Title",
+    "content": "Content",
+    "difficulty": "Difficulty",
+    "length": "Length",
+    "reference": "Instructions (Optional)",
+    "generateBtn": "Generate Story",
+    "saveBtn": "Save Story",
+    "updateBtn": "Update Story",
+    "clearBtn": "Clear",
+    "editBtn": "Edit",
+    "deleteBtn": "Delete",
+    "noGeneratedStory": "Generate a story to see it here",
+    "noSavedStories": "No saved stories yet",
+    "topicPlaceholder": "Enter story topic...",
+    "referencePlaceholder": "Additional instructions, vocabulary, outline, syntax focus...",
+    "generating": "Generating story...",
+    "saveSuccess": "Story saved successfully!",
+    "saveError": "Failed to save story.",
+    "deleteError": "Failed to delete story.",
+    "generateError": "Failed to generate story. Please check your Ollama connection.",
+    "confirmDelete": "Are you sure you want to delete this story?",
+    "genreList": {
+      "fantasy": "Fantasy",
+      "scifi": "Science Fiction",
+      "mystery": "Mystery",
+      "romance": "Romance",
+      "adventure": "Adventure",
+      "horror": "Horror",
+      "comedy": "Comedy",
+      "drama": "Drama",
+      "fairytale": "Fairytale",
+      "historical": "Historical"
+    },
+    "difficultyList": {
+      "beginner": "Beginner",
+      "intermediate": "Intermediate",
+      "advanced": "Advanced"
+    },
+    "lengthList": {
+      "short": "Short (~200 words)",
+      "medium": "Medium (~500 words)",
+      "long": "Long (~1000 words)"
+    }
   }
 }

@@ -1,9 +1,13 @@
 {
+  "common": {
+    "selectModel": "选择模型"
+  },
   "menu": {
     "home": "主页",
     "models": "模型",
     "instructions": "指令",
     "knowledgeBases": "知识库",
+    "stories": "故事生成器",
     "chat": "对话",
     "settings": "设置",
     "realtime": "实时语音"
@@ -213,5 +217,56 @@
     "selectModel": "选择模型",
     "selectModels": "选择模型",
     "invalidUrl": "无效的URL"
+  },
+  "stories": {
+    "generateTitle": "生成新故事",
+    "generatedTitle": "生成的故事",
+    "savedStories": "已保存的故事",
+    "model": "模型",
+    "genre": "类型",
+    "topic": "主题",
+    "title": "标题",
+    "content": "内容",
+    "difficulty": "难度",
+    "length": "长度",
+    "reference": "说明（可选）",
+    "generateBtn": "生成故事",
+    "saveBtn": "保存故事",
+    "updateBtn": "更新故事",
+    "clearBtn": "清除",
+    "editBtn": "编辑",
+    "deleteBtn": "删除",
+    "noGeneratedStory": "生成一个故事以在此处查看",
+    "noSavedStories": "暂无保存的故事",
+    "topicPlaceholder": "输入故事主题...",
+    "referencePlaceholder": "额外说明、词汇表、大纲、语法重点...",
+    "generating": "正在生成故事...",
+    "saveSuccess": "故事保存成功！",
+    "saveError": "保存故事失败。",
+    "deleteError": "删除故事失败。",
+    "generateError": "生成故事失败。请检查您的Ollama连接。",
+    "confirmDelete": "确定要删除这个故事吗？",
+    "genreList": {
+      "fantasy": "奇幻",
+      "scifi": "科幻",
+      "mystery": "悬疑",
+      "romance": "浪漫",
+      "adventure": "冒险",
+      "horror": "恐怖",
+      "comedy": "喜剧",
+      "drama": "剧情",
+      "fairytale": "童话",
+      "historical": "历史"
+    },
+    "difficultyList": {
+      "beginner": "初级",
+      "intermediate": "中级",
+      "advanced": "高级"
+    },
+    "lengthList": {
+      "short": "短篇 (~200词)",
+      "medium": "中篇 (~500词)",
+      "long": "长篇 (~1000词)"
+    }
   }
 }

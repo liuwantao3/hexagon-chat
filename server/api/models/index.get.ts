@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
     models.push(...response.models)
   }
 
-  if (keys.openai.key) {
+  if (keys.openai?.key) {
     try {
       const response = await fetch('https://api.openai.com/v1/models', {
         headers: {
@@ -65,7 +65,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (keys.azureOpenai.key && keys.azureOpenai.endpoint && keys.azureOpenai.deploymentName) {
+  if (keys.azureOpenai?.key && keys.azureOpenai?.endpoint && keys.azureOpenai?.deploymentName) {
     AZURE_OPENAI_GPT_MODELS.forEach((model) => {
       models.push({
         name: model,
@@ -76,7 +76,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  if (keys.anthropic.key) {
+  if (keys.anthropic?.key) {
     ANTHROPIC_MODELS.forEach((model) => {
       models.push({
         name: model,
@@ -87,7 +87,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  if (keys.moonshot.key) {
+  if (keys.moonshot?.key) {
     MOONSHOT_MODELS.forEach((model) => {
       models.push({
         name: model,
@@ -125,7 +125,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (keys.gemini.key) {
+  if (keys.gemini?.key) {
     GEMINI_MODELS.forEach((model) => {
       models.push({
         name: model,
@@ -136,7 +136,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  if (keys.groq.key) {
+  if (keys.groq?.key) {
     GROQ_MODELS.forEach((model) => {
       models.push({
         name: model,
