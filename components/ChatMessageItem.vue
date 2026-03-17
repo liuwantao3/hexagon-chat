@@ -67,6 +67,8 @@ watch(() => props.showToggleButton, (value) => {
 const contentDisplay = computed(() => {
   return props.message.type === 'loading' ? 'loading' : 'normal'
 })
+
+const isToolResult = computed(() => props.message.toolResult)
 </script>
 
 <template>
@@ -92,7 +94,16 @@ const contentDisplay = computed(() => {
           <span class="block i-svg-spinners-3-dots-scale"></span>
         </div>
         <template v-else-if="isModelMessage">
-          <div class="p-3 overflow-hidden">
+          <!-- Tool Result Display -->
+          <div v-if="isToolResult" class="p-3 overflow-hidden bg-yellow-50 dark:bg-yellow-900/30 border-l-4 border-yellow-500">
+            <div class="text-xs text-yellow-600 dark:text-yellow-400 font-semibold mb-1 flex items-center">
+              <UIcon name="i-heroicons-beaker" class="mr-1" />
+              Tool Result
+            </div>
+            <div v-html="markdown.render(renderContent || '')" class="md-body text-xs font-mono"></div>
+          </div>
+          <!-- Normal Message Display -->
+          <div v-else class="p-3 overflow-hidden">
             <div :class="{ 'line-clamp-3 max-h-[5rem]': !opened }">
               <!-- Handle string case -->
               <div v-html="markdown.render(renderContent || '')" class="md-body"></div>

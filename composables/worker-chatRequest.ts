@@ -4,7 +4,7 @@ import type { clientDB, ChatHistory } from '~/composables/clientDB'
 
 type RelevantDocument = Required<ChatHistory>['relevantDocs'][number]
 type ResponseRelevantDocument = { type: 'relevant_documents', relevant_documents: RelevantDocument[] }
-type ResponseMessage = { message: { role: string, content: string, type?: string, tool_use_id?: string } }
+type ResponseMessage = { message: { role: string, content: string, type?: string, tool_use_id?: string, name?: string } }
 
 interface RequestData {
   sessionId: number
@@ -14,6 +14,7 @@ interface RequestData {
   messages: Array<SetRequired<Partial<ChatMessage>, 'role' | 'content' | 'toolResult' | 'toolCallId'>>
   stream: boolean
   timestamp: number
+  codeAgentEnabled?: boolean
 }
 
 export type WorkerReceivedMessage =
@@ -70,6 +71,7 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
       family,
       messages: data.messages,
       stream: data.stream,
+      codeAgentEnabled: data.codeAgentEnabled,
     }),
     // body: {
     //   knowledgebaseId: data.knowledgebaseId,

@@ -14,6 +14,7 @@ import { resolveCoreference } from '~/server/coref'
 import { concat } from "@langchain/core/utils/stream"
 import { MODEL_FAMILIES } from '~/config'
 import { McpService } from '@/server/utils/mcp'
+import { codeExecutionTools } from '@/server/utils/codeExecution'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { ChatOllama } from '@langchain/ollama'
 import { tool } from '@langchain/core/tools'
@@ -25,12 +26,13 @@ interface RequestBody {
     model: string
     family: string
     messages: {
-        role: 'user' | 'assistant'
+        role: 'system' | 'user' | 'assistant'
         content: string
         toolCallId?: string
         toolResult: boolean
     }[]
     stream: any
+    codeAgentEnabled?: boolean
 }
 
 const SYSTEM_TEMPLATE = `Answer the user's question based on the context below.
@@ -57,7 +59,12 @@ const serializeMessages = (messages: RequestBody['messages']): string =>
     messages.slice(0, -1).map((message) => `${message.role}: ${message.content}`).join("\n")
 
 const transformMessages = (messages: RequestBody['messages']): BaseMessageLike[] =>
-    messages.slice(0, -1).map((message) => [message.role, message.content])
+    messages.map((message) => {
+        if (message.role === 'system') {
+            return [message.role, message.content] as [string, string]
+        }
+        return [message.role, message.content]
+    })
 
 const normalizeMessages = (messages: RequestBody['messages']): BaseMessage[] => {
     const normalizedMessages = []
@@ -76,9 +83,10 @@ const normalizeMessages = (messages: RequestBody['messages']): BaseMessage[] => 
 
 export default defineEventHandler(async (event) => {
     try {
-        const { knowledgebaseId, model, family, messages, stream } = await readBody<RequestBody>(event)
+        const { knowledgebaseId, model, family, messages, stream, codeAgentEnabled } = await readBody<RequestBody>(event)
 
         console.log("model family stream", model, family, stream)
+        console.log("codeAgentEnabled:", codeAgentEnabled)
         if (knowledgebaseId) {
             console.log("Chat with knowledge base with id: ", knowledgebaseId)
             const knowledgebase = await prisma.knowledgeBase.findUnique({
@@ -93,7 +101,8 @@ export default defineEventHandler(async (event) => {
             }
 
             const embeddings = createEmbeddings(knowledgebase.embedding!, event)
-            const retriever: BaseRetriever = await createRetriever(embeddings, `collection_${knowledgebase.id}`)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const retriever: any = await createRetriever(embeddings, `collection_${knowledgebase.id}`)
 
             const chat = createChatModel(model, family, event)
             const query = messages[messages.length - 1].content
@@ -181,20 +190,62 @@ export default defineEventHandler(async (event) => {
 
             const mcpService = new McpService()
             const normalizedTools = await mcpService.listTools()
-            const toolsMap = normalizedTools.reduce((acc, tool) => {
-                acc[tool.name] = tool
+            
+            // Combine MCP tools with code execution tools (only if enabled)
+            const toolsToUse = codeAgentEnabled ? [...codeExecutionTools, ...normalizedTools] : normalizedTools
+            const toolsMap = toolsToUse.reduce((acc, t) => {
+                acc[t.name] = t
                 return acc
             }, {})
-            if (family === MODEL_FAMILIES.anthropic && normalizedTools?.length) {
+
+            // Bind tools and use Agent for multi-round execution
+            // Inject system prompt for code agent mode
+            let finalMessages = messages
+            if (codeAgentEnabled && toolsToUse.length > 0) {
+                const toolDescriptions = toolsToUse.map(t => t.name + ': ' + t.description).join(', ')
+                const codeAgentSystemPrompt = `You have access to tools. When a task requires computation, data processing, or code execution:
+1. Use the available tools to accomplish the task step by step
+2. If a tool execution succeeds, check if the task is complete
+3. If not complete, continue with additional tool calls or provide your final answer
+4. Only respond with the final result after all necessary executions are done
+
+IMPORTANT for plotting/graphics:
+- Do NOT use plt.show() as it blocks until the window is closed, causing timeouts
+- Instead, save plots directly using plt.savefig('filename.png')
+- matplotlib will display the saved file automatically
+
+IMPORTANT for JavaScript:
+- You cannot install npm packages in this environment
+- Use only built-in Node.js modules (math, console, etc.)
+- For graphics, Python/matplotlib is recommended
+
+Available tools: ${toolDescriptions}`
+
+                finalMessages = [
+                    { role: 'system', content: codeAgentSystemPrompt, toolCallId: '', toolResult: false },
+                    ...messages
+                ]
+            }
+
+            console.log('[CodeAgent] Final messages count:', finalMessages.length)
+            
+            if (family === MODEL_FAMILIES.anthropic && toolsToUse?.length) {
                 if (llm?.bindTools) {
-                    llm = llm.bindTools(normalizedTools) as BaseChatModel
+                    llm = llm.bindTools(toolsToUse) as BaseChatModel
+                    console.log('[CodeAgent] Bound tools to Anthropic model')
                 }
             } else if (llm instanceof ChatOllama) {
-                // Handle ChatOllama if needed
+                // Ollama with tools - handled separately if needed
+            } else if (normalizedTools?.length || (codeAgentEnabled && codeExecutionTools.length)) {
+                // For other models that support function calling
+                if (llm?.bindTools) {
+                    llm = llm.bindTools(toolsToUse) as BaseChatModel
+                    console.log('[CodeAgent] Bound tools via bindTools for:', family)
+                }
             }
 
             if (!stream) {
-                const response = await llm.invoke(transformMessages(messages))
+                const response = await llm.invoke(transformMessages(finalMessages))
                 console.log("from non-stream:", response)
                 return {
                     message: {
@@ -205,7 +256,7 @@ export default defineEventHandler(async (event) => {
             }
 
             const response = await llm?.stream(
-                messages.map((message: RequestBody['messages'][number]) => {
+                finalMessages.map((message: RequestBody['messages'][number]) => {
                     let content: string | any[] = message.content
 
                     // Check if message.content is an array (contains text and/or image)
@@ -234,9 +285,10 @@ export default defineEventHandler(async (event) => {
 
                         // Handle array of text_delta objects
                         if (Array.isArray(content)) {
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             content = content
-                                .filter((item) => item.type === 'text_delta')
-                                .map((item) => item.text)
+                                .filter((item: any) => item.type === 'text_delta')
+                                .map((item: any) => item.text)
                                 .join('')
                         }
 
@@ -249,13 +301,18 @@ export default defineEventHandler(async (event) => {
                         yield `${JSON.stringify(message)} \n\n`
                     }
 
-                    for (const toolCall of gathered?.tool_calls ?? []) {
+                    // Handle tool calls - execute and return results
+                    const toolCalls = gathered?.tool_calls ?? []
+                    if (toolCalls.length > 0) {
+                        console.log(`[CodeAgent] Executing ${toolCalls.length} tool call(s)`)
+                    }
+
+                    for (const toolCall of toolCalls) {
                         console.log('Tool call: ', toolCall)
                         const selectedTool = toolsMap[toolCall.name]
 
                         if (selectedTool) {
                             const result = await selectedTool.invoke(toolCall)
-
                             console.log('Tool result: ', result)
 
                             const message = {
