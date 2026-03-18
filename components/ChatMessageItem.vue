@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { ChatMessage } from '~/types/chat'
 import { useKatexClient } from '~/composables/useKatexClient'
+import SvgViewer from '~/components/SvgViewer.vue'
 
 const props = defineProps<{
   message: ChatMessage
@@ -69,6 +70,27 @@ const contentDisplay = computed(() => {
 })
 
 const isToolResult = computed(() => props.message.toolResult)
+
+const toolResultContent = computed(() => {
+  if (!isToolResult.value) return null
+  const content = props.message.content
+  try {
+    if (typeof content === 'string') {
+      return JSON.parse(content)
+    }
+    return content
+  } catch {
+    return null
+  }
+})
+
+const isSvgToolResult = computed(() => {
+  return toolResultContent.value?.svg
+})
+
+const svgCode = computed(() => {
+  return toolResultContent.value?.svg || ''
+})
 </script>
 
 <template>
@@ -100,7 +122,10 @@ const isToolResult = computed(() => props.message.toolResult)
               <UIcon name="i-heroicons-beaker" class="mr-1" />
               Tool Result
             </div>
-            <div v-html="markdown.render(renderContent || '')" class="md-body text-xs font-mono"></div>
+            <!-- SVG Display -->
+            <SvgViewer v-if="isSvgToolResult" :svg-code="svgCode" />
+            <!-- Normal Tool Result -->
+            <div v-else v-html="markdown.render(renderContent || '')" class="md-body text-xs font-mono"></div>
           </div>
           <!-- Normal Message Display -->
           <div v-else class="p-3 overflow-hidden">
