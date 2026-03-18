@@ -74,7 +74,9 @@ model Story {
   user_id    Int?
   length     String?
   audio_path String?
+  voice_speed Float?
   image_path String?
   image_url  String?
+  sentence_timestamps String?
   User       User?    @relation(fields: [user_id], references: [id])
 }

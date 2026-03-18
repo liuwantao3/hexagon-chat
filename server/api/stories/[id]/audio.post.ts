@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const { audio_hex, voice_id, model, speed, emotion } = body
+  const { audio_hex, voice_id, model, speed, emotion, sentence_timestamps } = body
 
   if (!audio_hex) {
     throw createError({
@@ -50,6 +50,8 @@ export default defineEventHandler(async (event) => {
     where: { id: story.id },
     data: {
       audio_path: audioPath,
+      voice_speed: speed ? parseFloat(speed) : 1.0,
+      sentence_timestamps: sentence_timestamps ? JSON.stringify(sentence_timestamps) : null,
       updated_at: new Date()
     }
   })

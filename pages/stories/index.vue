@@ -93,9 +93,18 @@ const audioRef = ref<HTMLAudioElement | null>(null)
 const isGeneratingVoice = ref(false)
 const isSavingVoice = ref(false)
 const currentAudioUrl = useStorage<string | null>('story-audio-url', null)
+const currentAudioTimestamps = ref<any[] | null>(null)
 const isPlaying = ref(false)
 const currentPlayingStoryId = ref<number | null>(null)
 let currentAudio: HTMLAudioElement | null = null
+
+function hexToUint8Array(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16)
+  }
+  return bytes
+}
 
 const voiceOptions = [
   { value: 'Chinese (Mandarin)_Lyrical_Voice', label: 'Chinese - Lyrical' },
@@ -521,7 +530,7 @@ async function generateVoice() {
 
   isGeneratingVoice.value = true
   try {
-    const res = await $fetch<Blob>('/api/audio/speech', {
+    const res = await $fetch<{ audio_hex: string; sentence_timestamps: any[] }>('/api/audio/speech_async', {
       method: 'POST',
       body: {
         text: generatedStory.value.content,
@@ -533,11 +542,13 @@ async function generateVoice() {
       headers: getKeysHeader()
     })
 
-    const blob = new Blob([res], { type: 'audio/mpeg' })
+    const audioBuffer = hexToUint8Array(res.audio_hex)
+    const blob = new Blob([audioBuffer], { type: 'audio/mpeg' })
     if (currentAudioUrl.value) {
       URL.revokeObjectURL(currentAudioUrl.value)
     }
     currentAudioUrl.value = URL.createObjectURL(blob)
+    currentAudioTimestamps.value = res.sentence_timestamps
   } catch (e) {
     console.error('Failed to generate voice:', e)
     toast.add({ title: 'Failed to generate voice. Please check MiniMax API key.', color: 'red' })
@@ -598,11 +609,15 @@ async function saveVoiceToStory() {
 
     await $fetch(`/api/stories/${storyId}/audio`, {
       method: 'POST',
-      body: { audio_hex: audioHex },
+      body: { 
+        audio_hex: audioHex,
+        sentence_timestamps: currentAudioTimestamps.value
+      },
       headers: getKeysHeader()
     })
   }
 
+  currentAudioTimestamps.value = null
   pauseVoice()
   generatedStory.value = null
   editingStoryId.value = null
