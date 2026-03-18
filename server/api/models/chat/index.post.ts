@@ -16,6 +16,7 @@ import { MODEL_FAMILIES } from '~/config'
 import { McpService } from '@/server/utils/mcp'
 import { codeExecutionTools } from '@/server/utils/codeExecution'
 import { svgTools } from '@/server/utils/svgTool'
+import { imageTools, setImageToolKeys } from '@/server/utils/imageTool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { ChatOllama } from '@langchain/ollama'
 import { tool } from '@langchain/core/tools'
@@ -193,7 +194,7 @@ export default defineEventHandler(async (event) => {
             const normalizedTools = await mcpService.listTools()
             
             // Combine MCP tools with code execution tools (only if enabled)
-            const toolsToUse = codeAgentEnabled ? [...codeExecutionTools, ...svgTools, ...normalizedTools] : normalizedTools
+            const toolsToUse = codeAgentEnabled ? [...codeExecutionTools, ...svgTools, ...imageTools, ...normalizedTools] : normalizedTools
             const toolsMap = toolsToUse.reduce((acc, t) => {
                 acc[t.name] = t
                 return acc
@@ -306,6 +307,12 @@ Available tools: ${toolDescriptions}`
                     const toolCalls = gathered?.tool_calls ?? []
                     if (toolCalls.length > 0) {
                         console.log(`[CodeAgent] Executing ${toolCalls.length} tool call(s)`)
+                        
+                        // Set API keys for tools that need them
+                        const keys = event.context.keys
+                        if (keys?.minimax) {
+                            setImageToolKeys(keys.minimax.key, keys.minimax.endpoint)
+                        }
                     }
 
                     for (const toolCall of toolCalls) {

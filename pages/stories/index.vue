@@ -7,6 +7,17 @@ import { useStorage } from '@vueuse/core'
 
 const { chatModels } = useModels()
 
+const baseUrl = computed(() => {
+  if (process.client) {
+    return window.location.origin
+  }
+  return ''
+})
+
+function getImageUrl(path: string) {
+  return path.startsWith('http') ? path : `${baseUrl.value}${path}`
+}
+
 const genres = computed(() => [
   { value: 'fantasy', label: t('stories.genreList.fantasy') },
   { value: 'scifi', label: t('stories.genreList.scifi') },
@@ -41,7 +52,7 @@ const selectedModel = useStorage('story-model', '')
 const selectedInstruction = useStorage<number | null>('story-instruction', null)
 const instructions = ref<{ id: number; name: string; label: string }[]>([])
 
-const generatedStory = useStorage<{
+const generatedStory = ref<{
   title: string
   content: string
   genre: string
@@ -49,7 +60,28 @@ const generatedStory = useStorage<{
   difficulty: string
   length: string | null
   reference: string | null
-} | null>('story-generated', null)
+} | null>(null)
+
+// Sync to localStorage manually
+watch(generatedStory, (newVal) => {
+  if (newVal) {
+    localStorage.setItem('story-generated', JSON.stringify(newVal))
+  } else {
+    localStorage.removeItem('story-generated')
+  }
+}, { deep: true })
+
+// Load from localStorage on mount
+onMounted(() => {
+  const saved = localStorage.getItem('story-generated')
+  if (saved) {
+    try {
+      generatedStory.value = JSON.parse(saved)
+    } catch (e) {
+      console.error('Failed to parse saved story:', e)
+    }
+  }
+})
 
 const editingStoryId = useStorage<number | null>('story-editing-id', null)
 
@@ -88,6 +120,211 @@ const selectedVoice = useStorage('story-voice', 'Chinese (Mandarin)_Lyrical_Voic
 const selectedEmotion = useStorage('story-emotion', 'happy')
 const selectedVoiceSpeed = useStorage('story-voice-speed', 1)
 
+// Image generation state
+const isGeneratingImage = ref(false)
+const isSavingImage = ref(false)
+const currentImageUrl = useStorage<string | null>('story-image-url', null)
+const selectedImageAspectRatio = useStorage('story-image-aspect-ratio', '1:1')
+const selectedImageModel = useStorage('story-image-model', 'image-01')
+const selectedImageInstruction = useStorage<number | null>('story-image-instruction', null)
+const additionalImageRequirement = useStorage('story-image-requirement', '')
+
+const aspectRatioOptions = [
+  { value: '1:1', label: '1:1 (Square)' },
+  { value: '16:9', label: '16:9 (Landscape)' },
+  { value: '4:3', label: '4:3' },
+  { value: '3:2', label: '3:2' },
+  { value: '2:3', label: '2:3 (Portrait)' },
+  { value: '3:4', label: '3:4' },
+  { value: '9:16', label: '9:16 (Vertical)' }
+]
+
+const imageModelOptions = [
+  { value: 'image-01', label: 'Image-01' },
+  { value: 'image-01-live', label: 'Image-01 Live' }
+]
+
+ async function generateImage() {
+  if (!generatedStory.value || !generatedStory.value.title) return
+
+  isGeneratingImage.value = true
+  try {
+    const keys = getKeysHeader()
+    const keysData = keys['x-chat-ollama-keys'] ? JSON.parse(decodeURIComponent(keys['x-chat-ollama-keys'])) : {}
+    
+    const selectedModelObj = chatModels.value.find(m => m.value === selectedModel.value)
+    const modelFamily = selectedModelObj?.family
+    const modelName = selectedModelObj?.name
+    console.log('[Image Generation] Selected model:', selectedModel.value, 'Family:', modelFamily, 'Name:', modelName)
+    
+    // First, summarize the story
+    const summaryPrompt = `Summarize the following story in about 100 words, focusing on the main characters, setting, and key actions that would be important for creating an illustration:\n\n${generatedStory.value.content || ''}`
+    
+    console.log('[Image Generation] Summarizing story...')
+    
+    const summaryRes = await $fetch<any>('/api/models/chat', {
+      method: 'POST',
+      body: {
+        model: modelName,
+        family: modelFamily,
+        messages: [
+          { role: 'user', content: summaryPrompt }
+        ],
+        stream: false
+      },
+      headers: getKeysHeader()
+    })
+    
+    const summary = summaryRes.message.content
+    
+    // Remove thinking/reflection sections from summary (same regex as ChatMessageItem)
+    const regex = /<think>[\s\S]*?<\/think>/gs
+    let cleanSummary = summary.replace(regex, '').trim()
+    
+    console.log('[Image Generation] Story summary:', cleanSummary)
+    
+    // Build final prompt with summary and instruction
+    let prompt = `Create an illustration for a story titled "${generatedStory.value.title}". ${cleanSummary}`
+    
+    // Include instruction if selected
+    const instructionId = selectedImageInstruction.value
+    console.log('[Image Generation] Selected instruction ID:', instructionId)
+    
+    if (instructionId) {
+      const selectedInst = instructions.value.find(i => i.id == instructionId)
+      console.log('[Image Generation] Selected instruction found:', selectedInst)
+      if (selectedInst) {
+        prompt = `${selectedInst.instruction}\n\n${prompt}`
+      }
+    }
+    
+    // Add additional requirements if provided
+    if (additionalImageRequirement.value && additionalImageRequirement.value.trim()) {
+      prompt = `${prompt}\n\nAdditional requirements: ${additionalImageRequirement.value.trim()}`
+    }
+    
+    // Truncate to 1500 characters (API limit)
+    if (prompt.length > 1500) {
+      prompt = prompt.substring(0, 1450) + '...'
+    }
+    
+    console.log('[Image Generation] Final Prompt:', prompt)
+    
+    const res = await $fetch<any>('/api/image/generate', {
+      method: 'POST',
+      body: {
+        prompt,
+        aspect_ratio: selectedImageAspectRatio.value,
+        model: selectedImageModel.value
+      },
+      headers: {
+        'x-chat-ollama-keys': JSON.stringify({
+          minimax: keysData.minimax
+        })
+      }
+    })
+    
+    const result = JSON.parse(res)
+    if (result.imageUrls && result.imageUrls.length > 0) {
+      currentImageUrl.value = result.imageUrls[0]
+    } else if (result.error) {
+      toast.add({ title: result.error, color: 'red' })
+    }
+  } catch (e) {
+    console.error('Failed to generate image:', e)
+    toast.add({ title: 'Failed to generate image. Please check MiniMax API key.', color: 'red' })
+  } finally {
+    isGeneratingImage.value = false
+  }
+}
+
+async function saveImageToStory() {
+  if (!generatedStory.value || !currentImageUrl.value) return
+
+  let storyId: number
+
+  if (editingStoryId.value) {
+    await $fetch(`/api/stories/${editingStoryId.value}`, {
+      method: 'PUT',
+      body: {
+        title: generatedStory.value.title,
+        content: generatedStory.value.content,
+        genre: generatedStory.value.genre,
+        topic: generatedStory.value.topic,
+        difficulty: generatedStory.value.difficulty,
+        length: generatedStory.value.length,
+        reference: generatedStory.value.reference,
+        status: 'published'
+      },
+      headers: getKeysHeader()
+    })
+    storyId = editingStoryId.value
+  } else {
+    const res = await $fetch<{ id: number }>('/api/stories', {
+      method: 'POST',
+      body: {
+        title: generatedStory.value.title,
+        content: generatedStory.value.content,
+        genre: generatedStory.value.genre,
+        topic: generatedStory.value.topic,
+        difficulty: generatedStory.value.difficulty,
+        length: generatedStory.value.length,
+        reference: generatedStory.value.reference,
+        status: 'published'
+      },
+      headers: getKeysHeader()
+    })
+    storyId = res.id
+  }
+
+  if (currentImageUrl.value.startsWith('http')) {
+    await $fetch(`/api/stories/${storyId}/image`, {
+      method: 'POST',
+      body: { image_url: currentImageUrl.value },
+      headers: getKeysHeader()
+    })
+  }
+
+  currentImageUrl.value = null
+  generatedStory.value = null
+  editingStoryId.value = null
+  await loadStories()
+  toast.add({ title: 'Story saved with image!', color: 'green' })
+}
+
+async function deleteImage() {
+  if (!editingStoryId.value) return
+  if (!confirm('Delete image from this story?')) return
+
+  try {
+    await $fetch(`/api/stories/${editingStoryId.value}/image`, {
+      method: 'DELETE',
+      headers: getKeysHeader()
+    })
+    currentImageUrl.value = null
+    await loadStories()
+  } catch (e) {
+    console.error('Failed to delete image:', e)
+  }
+}
+
+function viewImage() {
+  if (currentImageUrl.value) {
+    window.open(currentImageUrl.value, '_blank')
+  }
+}
+
+function clearGeneratedStory() {
+  generatedStory.value = null
+  editingStoryId.value = null
+  currentAudioUrl.value = null
+  currentImageUrl.value = null
+  if (audioRef.value) {
+    audioRef.value.pause()
+    audioRef.value = null
+  }
+}
+
 async function loadStories() {
   isLoadingStories.value = true
   try {
@@ -108,7 +345,9 @@ async function generateStory() {
     return
   }
 
-  const modelFamily = chatModels.value.find(m => m.name === selectedModel.value)?.family
+  const selectedModelObj = chatModels.value.find(m => m.value === selectedModel.value)
+  const modelFamily = selectedModelObj?.family
+  const modelName = selectedModelObj?.name
 
   isGenerating.value = true
   try {
@@ -119,7 +358,7 @@ async function generateStory() {
         topic: topic.value,
         difficulty: selectedDifficulty.value,
         length: selectedLength.value,
-        model: selectedModel.value,
+        model: modelName,
         family: modelFamily,
         reference: reference.value,
         instructionId: selectedInstruction.value || null
@@ -195,9 +434,19 @@ function editStory(story: any) {
   editingStoryId.value = story.id
   
   if (story.audio_path) {
-    currentAudioUrl.value = story.audio_path
+    const baseUrl = process.client ? window.location.origin : ''
+    currentAudioUrl.value = `${baseUrl}${story.audio_path}`
   } else {
     currentAudioUrl.value = null
+  }
+  
+  if (story.image_url) {
+    currentImageUrl.value = story.image_url
+  } else if (story.image_path) {
+    const baseUrl = process.client ? window.location.origin : ''
+    currentImageUrl.value = `${baseUrl}${story.image_path}`
+  } else {
+    currentImageUrl.value = null
   }
 }
 
@@ -386,16 +635,6 @@ function playSavedAudio(story: any) {
   setTimeout(() => {
     playVoice()
   }, 200)
-}
-
-function clearGeneratedStory() {
-  generatedStory.value = null
-  editingStoryId.value = null
-  currentAudioUrl.value = null
-  if (audioRef.value) {
-    audioRef.value.pause()
-    audioRef.value = null
-  }
 }
 
 onMounted(async () => {
@@ -663,6 +902,112 @@ watch(() => chatModels.value, (newModels) => {
 
               <audio ref="audioRef" :src="currentAudioUrl || undefined" class="hidden" />
             </div>
+
+            <!-- Image Generation Section -->
+            <div class="border-t pt-4 mt-4">
+              <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Image Generation
+              </h3>
+              
+              <div class="grid grid-cols-3 gap-3 mb-3">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Aspect Ratio</label>
+                  <USelect
+                    v-model="selectedImageAspectRatio"
+                    :options="aspectRatioOptions"
+                    option-label="label"
+                    option-value="value"
+                    size="sm"
+                    class="w-full"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Model</label>
+                  <USelect
+                    v-model="selectedImageModel"
+                    :options="imageModelOptions"
+                    option-label="label"
+                    option-value="value"
+                    size="sm"
+                    class="w-full"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Instruction</label>
+                  <USelect
+                    v-model="selectedImageInstruction"
+                    :options="instructions"
+                    option-label="label"
+                    option-value="id"
+                    value-attribute="id"
+                    :by="(a: any, b: any) => a === b"
+                    size="sm"
+                    clearable
+                    placeholder="Optional"
+                    class="w-full"
+                  />
+                </div>
+              </div>
+              
+              <div class="mb-3">
+                <label class="block text-xs text-gray-500 mb-1">Additional Requirements</label>
+                <UInput
+                  v-model="additionalImageRequirement"
+                  placeholder="e.g., Use warm colors, show at sunset..."
+                  size="sm"
+                  class="w-full"
+                />
+              </div>
+
+              <div class="flex gap-2">
+                <UButton 
+                  @click="generateImage" 
+                  :loading="isGeneratingImage"
+                  icon="i-heroicons-photo-20-solid"
+                  size="sm"
+                >
+                  Generate Image
+                </UButton>
+
+                <template v-if="currentImageUrl">
+                  <UButton 
+                    @click="viewImage" 
+                    icon="i-heroicons-eye-20-solid"
+                    size="sm"
+                    color="green"
+                  >
+                    View
+                  </UButton>
+                  <UButton 
+                    v-if="editingStoryId"
+                    @click="deleteImage" 
+                    icon="i-heroicons-trash-20-solid"
+                    size="sm"
+                    color="error"
+                    variant="outline"
+                  >
+                    Delete
+                  </UButton>
+                  <UButton 
+                    @click="saveImageToStory" 
+                    :loading="isSavingImage"
+                    icon="i-heroicons-cloud-arrow-up-20-solid"
+                    size="sm"
+                    color="primary"
+                  >
+                    Save with Image
+                  </UButton>
+                </template>
+              </div>
+
+              <div v-if="currentImageUrl" class="mt-3">
+                <img 
+                  :src="currentImageUrl" 
+                  alt="Generated image preview" 
+                  class="max-w-full h-auto rounded-lg shadow-md max-h-64"
+                />
+              </div>
+            </div>
           </div>
 
           <div v-else class="text-gray-500 dark:text-gray-400 text-center py-12">
@@ -701,6 +1046,13 @@ watch(() => chatModels.value, (newModels) => {
             <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-3">
               {{ story.content }}
             </p>
+            <div v-if="story.image_path || story.image_url" class="mt-3">
+              <img 
+                :src="getImageUrl(story.image_path || story.image_url)" 
+                alt="Story illustration" 
+                class="w-full h-32 object-cover rounded-lg"
+              />
+            </div>
             <div class="flex gap-2 mt-4">
               <UButton size="xs" @click="editStory(story)">
                 {{ t('stories.editBtn') }}

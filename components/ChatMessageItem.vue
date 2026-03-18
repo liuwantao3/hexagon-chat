@@ -91,6 +91,18 @@ const isSvgToolResult = computed(() => {
 const svgCode = computed(() => {
   return toolResultContent.value?.svg || ''
 })
+
+const isImageToolResult = computed(() => {
+  return toolResultContent.value?.imageUrls && toolResultContent.value.imageUrls.length > 0
+})
+
+const imageUrls = computed(() => {
+  return toolResultContent.value?.imageUrls || []
+})
+
+const imageError = computed(() => {
+  return toolResultContent.value?.error
+})
 </script>
 
 <template>
@@ -124,6 +136,20 @@ const svgCode = computed(() => {
             </div>
             <!-- SVG Display -->
             <SvgViewer v-if="isSvgToolResult" :svg-code="svgCode" />
+            <!-- Image Display -->
+            <div v-else-if="isImageToolResult" class="flex flex-wrap gap-2 mt-2">
+              <img 
+                v-for="(url, index) in imageUrls" 
+                :key="index"
+                :src="url" 
+                :alt="`Generated image ${index + 1}`"
+                class="max-w-full h-auto rounded-lg shadow-md"
+              />
+            </div>
+            <!-- Error Display -->
+            <div v-else-if="imageError" class="text-red-500 text-xs">
+              {{ imageError }}
+            </div>
             <!-- Normal Tool Result -->
             <div v-else v-html="markdown.render(renderContent || '')" class="md-body text-xs font-mono"></div>
           </div>

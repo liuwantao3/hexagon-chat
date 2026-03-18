@@ -74,5 +74,7 @@ model Story {
   user_id    Int?
   length     String?
   audio_path String?
+  image_path String?
+  image_url  String?
   User       User?    @relation(fields: [user_id], references: [id])
 }

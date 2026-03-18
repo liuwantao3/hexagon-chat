@@ -144,7 +144,10 @@ function initChat(family: string, modelName: string, params: InitChatParams, isC
 
 export const createChatModel = (modelName: string, family: string, event: H3Event): BaseChatModel => {
   const keys = event.context.keys
+  console.log('[createChatModel] modelName:', modelName, 'family:', family)
+  console.log('[createChatModel] keys available:', Object.keys(keys || {}))
   const [familyValue] = Object.entries(MODEL_FAMILIES).find(([key, val]) => val === family) || []
+  console.log('[createChatModel] familyValue found:', familyValue)
 
   if (familyValue) {
     const data = keys[familyValue as Exclude<keyof ContextKeys, 'ollama' | 'custom'>]
