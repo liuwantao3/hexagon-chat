@@ -4,7 +4,7 @@ import type { clientDB, ChatHistory } from '~/composables/clientDB'
 
 type RelevantDocument = Required<ChatHistory>['relevantDocs'][number]
 type ResponseRelevantDocument = { type: 'relevant_documents', relevant_documents: RelevantDocument[] }
-type ResponseMessage = { message: { role: string, content: string, type?: string, tool_use_id?: string, name?: string } }
+type ResponseMessage = { message: { role: string, content: string, toolResult?: boolean, toolCallId?: string, name?: string } }
 
 interface RequestData {
   sessionId: number
@@ -134,11 +134,11 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
         //console.log(`%c${data.model}`, 'color:#818cf8', line)
         const chatMessage = JSON.parse(line) as ResponseMessage | ResponseRelevantDocument
         const isMessage = !('type' in chatMessage) && 'message' in chatMessage
-        const isToolResult = isMessage && chatMessage.message.type === 'tool_result'
+        const isToolResult = isMessage && chatMessage.message.toolResult === true
 
         if (isMessage) {
           if (isToolResult) {
-            msgContent = "```json\n" + chatMessage.message.content + "\n```"
+            msgContent = chatMessage.message.content
           } else {
             msgContent += chatMessage.message.content
           }
@@ -154,7 +154,7 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
           startTime: data.timestamp,
           endTime: Date.now(),
           toolResult: isToolResult,
-          toolCallId: isToolResult ? chatMessage.message.tool_use_id : undefined,
+          toolCallId: isToolResult ? chatMessage.message.toolCallId : undefined,
         }
 
         if (id === -1 || isToolResult) {
@@ -177,7 +177,7 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
               role: 'assistant',
               model: data.model,
               toolResult: isToolResult,
-              toolCallId: isToolResult ? chatMessage.message.tool_use_id : undefined,
+              toolCallId: isToolResult ? chatMessage.message.toolCallId : undefined,
             }
           })
         } else if (chatMessage.type === 'relevant_documents') {

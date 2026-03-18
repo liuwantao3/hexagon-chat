@@ -121,7 +121,9 @@ async function loadChatHistory(sessionId?: number) {
         startTime: el.startTime || 0,
         endTime: el.endTime || 0,
         type: el.canceled ? 'canceled' : (el.failed ? 'error' : undefined),
-        relevantDocs: el.relevantDocs
+        relevantDocs: el.relevantDocs,
+        toolResult: el.toolResult,
+        toolCallId: el.toolCallId
       } as const
     })
   }

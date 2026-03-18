@@ -1,2 +1,5 @@
 # Audio files
 public/audio/
+
+# SVG files
+*.svg

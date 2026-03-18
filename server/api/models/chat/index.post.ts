@@ -15,6 +15,7 @@ import { concat } from "@langchain/core/utils/stream"
 import { MODEL_FAMILIES } from '~/config'
 import { McpService } from '@/server/utils/mcp'
 import { codeExecutionTools } from '@/server/utils/codeExecution'
+import { svgTools } from '@/server/utils/svgTool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { ChatOllama } from '@langchain/ollama'
 import { tool } from '@langchain/core/tools'
@@ -192,7 +193,7 @@ export default defineEventHandler(async (event) => {
             const normalizedTools = await mcpService.listTools()
             
             // Combine MCP tools with code execution tools (only if enabled)
-            const toolsToUse = codeAgentEnabled ? [...codeExecutionTools, ...normalizedTools] : normalizedTools
+            const toolsToUse = codeAgentEnabled ? [...codeExecutionTools, ...svgTools, ...normalizedTools] : normalizedTools
             const toolsMap = toolsToUse.reduce((acc, t) => {
                 acc[t.name] = t
                 return acc
@@ -318,8 +319,8 @@ Available tools: ${toolDescriptions}`
                             const message = {
                                 message: {
                                     role: 'user',
-                                    type: 'tool_result',
-                                    tool_use_id: result.tool_call_id,
+                                    toolResult: true,
+                                    toolCallId: result.tool_call_id,
                                     content: result.content,
                                 },
                             }
