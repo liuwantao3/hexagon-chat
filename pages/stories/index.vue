@@ -1,8 +1,9 @@
 <script setup lang="ts">
 const { t } = useI18n()
 const toast = useToast()
-import { getKeysHeader } from '~/utils/settings'
+import { getKeysHeader, loadOllamaInstructions } from '~/utils/settings'
 import { useModels } from '~/composables/useModels'
+import { useStorage } from '@vueuse/core'
 
 const { chatModels } = useModels()
 
@@ -31,14 +32,16 @@ const lengths = computed(() => [
   { value: 'long', label: t('stories.lengthList.long') }
 ])
 
-const selectedGenre = ref('fantasy')
-const topic = ref('')
-const selectedDifficulty = ref('intermediate')
-const selectedLength = ref('medium')
-const reference = ref('')
-const selectedModel = ref('')
+const selectedGenre = useStorage('story-genre', 'fantasy')
+const topic = useStorage('story-topic', '')
+const selectedDifficulty = useStorage('story-difficulty', 'intermediate')
+const selectedLength = useStorage('story-length', 'medium')
+const reference = useStorage('story-reference', '')
+const selectedModel = useStorage('story-model', '')
+const selectedInstruction = useStorage<number | null>('story-instruction', null)
+const instructions = ref<{ id: number; name: string; label: string }[]>([])
 
-const generatedStory = ref<{
+const generatedStory = useStorage<{
   title: string
   content: string
   genre: string
@@ -46,17 +49,18 @@ const generatedStory = ref<{
   difficulty: string
   length: string | null
   reference: string | null
-} | null>(null)
+} | null>('story-generated', null)
+
+const editingStoryId = useStorage<number | null>('story-editing-id', null)
 
 const savedStories = ref<any[]>([])
 const isGenerating = ref(false)
 const isSaving = ref(false)
 const isLoadingStories = ref(false)
-const editingStoryId = ref<number | null>(null)
 const audioRef = ref<HTMLAudioElement | null>(null)
 const isGeneratingVoice = ref(false)
 const isSavingVoice = ref(false)
-const currentAudioUrl = ref<string | null>(null)
+const currentAudioUrl = useStorage<string | null>('story-audio-url', null)
 const isPlaying = ref(false)
 const currentPlayingStoryId = ref<number | null>(null)
 let currentAudio: HTMLAudioElement | null = null
@@ -80,9 +84,9 @@ const emotionOptions = [
   { value: 'calm', label: 'Calm' }
 ]
 
-const selectedVoice = ref('Chinese (Mandarin)_Lyrical_Voice')
-const selectedEmotion = ref('happy')
-const voiceSpeed = ref(1)
+const selectedVoice = useStorage('story-voice', 'Chinese (Mandarin)_Lyrical_Voice')
+const selectedEmotion = useStorage('story-emotion', 'happy')
+const selectedVoiceSpeed = useStorage('story-voice-speed', 1)
 
 async function loadStories() {
   isLoadingStories.value = true
@@ -99,6 +103,7 @@ async function loadStories() {
 }
 
 async function generateStory() {
+  console.log('Generating story with instruction:', selectedInstruction.value)
   if (!topic.value.trim() || !selectedModel.value) {
     return
   }
@@ -116,7 +121,8 @@ async function generateStory() {
         length: selectedLength.value,
         model: selectedModel.value,
         family: modelFamily,
-        reference: reference.value
+        reference: reference.value,
+        instructionId: selectedInstruction.value || null
       },
       headers: getKeysHeader()
     })
@@ -235,7 +241,7 @@ async function generateVoice() {
         text: generatedStory.value.content,
         voice_id: selectedVoice.value,
         emotion: selectedEmotion.value,
-        speed: voiceSpeed.value,
+        speed: selectedVoiceSpeed.value,
         format: 'mp3'
       },
       headers: getKeysHeader()
@@ -311,9 +317,11 @@ async function saveVoiceToStory() {
     })
   }
 
+  pauseVoice()
   generatedStory.value = null
   editingStoryId.value = null
   currentAudioUrl.value = null
+  currentPlayingStoryId.value = null
   await loadStories()
   toast.add({ title: 'Story saved with audio!', color: 'green' })
 }
@@ -390,8 +398,10 @@ function clearGeneratedStory() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadStories()
+  const loadedInstructions = await loadOllamaInstructions()
+  instructions.value = loadedInstructions.map(i => ({ ...i, label: i.name }))
 })
 
 watch(() => chatModels.value, (newModels) => {
@@ -495,6 +505,23 @@ watch(() => chatModels.value, (newModels) => {
               />
             </div>
 
+            <div v-if="instructions.length > 0">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Instruction
+              </label>
+              <USelect
+                v-model="selectedInstruction"
+                :options="instructions"
+                option-label="label"
+                option-value="id"
+                value-attribute="id"
+                :by="(a: any, b: any) => a === b"
+                :placeholder="'Select instruction (optional)'"
+                clearable
+                class="w-full"
+              />
+            </div>
+
             <UButton
               :loading="isGenerating"
               :disabled="!topic.trim() || !selectedModel"
@@ -580,8 +607,8 @@ watch(() => chatModels.value, (newModels) => {
                   />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Speed: {{ voiceSpeed }}</label>
-                  <URange v-model="voiceSpeed" :min="0.5" :max="2" :step="0.1" size="sm" />
+                  <label class="block text-xs text-gray-500 mb-1">Speed: {{ selectedVoiceSpeed }}</label>
+                  <URange v-model="selectedVoiceSpeed" :min="0.5" :max="2" :step="0.1" size="sm" />
                 </div>
               </div>
 

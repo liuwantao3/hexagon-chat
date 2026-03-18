@@ -1,11 +1,19 @@
 import { createChatModel } from '@/server/utils/models'
 import { MODEL_FAMILIES } from '~/config'
 import { tryParseJson } from '~/composables/utils'
+import prisma from '@/server/utils/prisma'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   
-  const { genre, topic, difficulty, length, reference, model, modelFamily } = body
+  console.log('Full request body:', JSON.stringify(body))
+  
+  const { genre, topic, difficulty, length, reference, model, modelFamily, instructionId } = body
+
+  // Convert instructionId to number if it's a valid string
+  const parsedInstructionId = instructionId ? parseInt(instructionId, 10) : null
+
+  console.log('Generate story request:', { genre, topic, parsedInstructionId })
 
   if (!genre || !topic || !difficulty) {
     setResponseStatus(event, 400)
@@ -29,6 +37,17 @@ export default defineEventHandler(async (event) => {
     }
   }
   event.context.keys = keys
+
+  // Fetch instruction if provided
+  let instruction = null
+  if (parsedInstructionId && !isNaN(parsedInstructionId)) {
+    try {
+      instruction = await prisma.instruction.findUnique({ where: { id: parsedInstructionId } })
+      console.log('Using instruction:', instruction)
+    } catch (e) {
+      console.warn('Failed to fetch instruction:', e)
+    }
+  }
 
   const lengthHint = length === 'short' ? 'A very short story, around 150-200 words.' :
                      length === 'medium' ? 'A short story, around 400-500 words.' :
@@ -81,8 +100,19 @@ Write the story directly without any preamble. Only output the final story with 
     
     const llm = createChatModel(modelName, family, event)
     
+    let systemPrompt = instruction 
+      ? `You are a creative story writer. ${instruction.instruction}`
+      : 'You are a creative story writer. Generate engaging stories based on the given criteria.'
+    
+    // Add reference to system prompt if provided
+    if (reference) {
+      systemPrompt += `\n\nAdditional requirements: ${reference}`
+    }
+    
+    console.log('System prompt:', systemPrompt)
+    
     const response = await llm.invoke([
-      ['system', 'You are a creative story writer. Generate engaging stories based on the given criteria.'],
+      ['system', systemPrompt],
       ['human', prompt]
     ])
 
