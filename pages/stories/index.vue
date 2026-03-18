@@ -123,6 +123,8 @@ const selectedVoiceSpeed = useStorage('story-voice-speed', 1)
 // Image generation state
 const isGeneratingImage = ref(false)
 const isSavingImage = ref(false)
+const isImageStopping = ref(false)
+const imageAbortController = ref<AbortController | null>(null)
 const currentImageUrl = useStorage<string | null>('story-image-url', null)
 const selectedImageAspectRatio = useStorage('story-image-aspect-ratio', '1:1')
 const selectedImageModel = useStorage('story-image-model', 'image-01')
@@ -147,7 +149,12 @@ const imageModelOptions = [
  async function generateImage() {
   if (!generatedStory.value || !generatedStory.value.title) return
 
+  // Create abort controller
+  imageAbortController.value = new AbortController()
+  const abortSignal = imageAbortController.value.signal
+  
   isGeneratingImage.value = true
+  isImageStopping.value = false
   try {
     const keys = getKeysHeader()
     const keysData = keys['x-chat-ollama-keys'] ? JSON.parse(decodeURIComponent(keys['x-chat-ollama-keys'])) : {}
@@ -156,6 +163,9 @@ const imageModelOptions = [
     const modelFamily = selectedModelObj?.family
     const modelName = selectedModelObj?.name
     console.log('[Image Generation] Selected model:', selectedModel.value, 'Family:', modelFamily, 'Name:', modelName)
+    
+    // Check if stopped
+    if (abortSignal.aborted || isImageStopping.value) return
     
     // First, summarize the story
     const summaryPrompt = `Summarize the following story in about 100 words, focusing on the main characters, setting, and key actions that would be important for creating an illustration:\n\n${generatedStory.value.content || ''}`
@@ -172,7 +182,8 @@ const imageModelOptions = [
         ],
         stream: false
       },
-      headers: getKeysHeader()
+      headers: getKeysHeader(),
+      signal: abortSignal
     })
     
     const summary = summaryRes.message.content
@@ -203,6 +214,13 @@ const imageModelOptions = [
       prompt = `${prompt}\n\nAdditional requirements: ${additionalImageRequirement.value.trim()}`
     }
     
+    // Check if stopped after summary
+    if (abortSignal.aborted || isImageStopping.value) {
+      console.log('[Image Generation] Stopped after summary')
+      isGeneratingImage.value = false
+      return
+    }
+    
     // Truncate to 1500 characters (API limit)
     if (prompt.length > 1500) {
       prompt = prompt.substring(0, 1450) + '...'
@@ -221,7 +239,8 @@ const imageModelOptions = [
         'x-chat-ollama-keys': JSON.stringify({
           minimax: keysData.minimax
         })
-      }
+      },
+      signal: abortSignal
     })
     
     const result = JSON.parse(res)
@@ -230,11 +249,25 @@ const imageModelOptions = [
     } else if (result.error) {
       toast.add({ title: result.error, color: 'red' })
     }
-  } catch (e) {
+  } catch (e: any) {
+    if (e.name === 'AbortError' || e.name === 'CancelledError') {
+      console.log('[Image Generation] Stopped by user')
+      return
+    }
     console.error('Failed to generate image:', e)
     toast.add({ title: 'Failed to generate image. Please check MiniMax API key.', color: 'red' })
   } finally {
     isGeneratingImage.value = false
+    isImageStopping.value = false
+    imageAbortController.value = null
+  }
+}
+
+function stopImageGeneration() {
+  if (imageAbortController.value) {
+    isImageStopping.value = true
+    imageAbortController.value.abort()
+    console.log('[Image Generation] Stop requested')
   }
 }
 
@@ -344,6 +377,10 @@ async function generateStory() {
   if (!topic.value.trim() || !selectedModel.value) {
     return
   }
+
+  editingStoryId.value = null
+  currentAudioUrl.value = null
+  currentImageUrl.value = null
 
   const selectedModelObj = chatModels.value.find(m => m.value === selectedModel.value)
   const modelFamily = selectedModelObj?.family
@@ -963,10 +1000,22 @@ watch(() => chatModels.value, (newModels) => {
                 <UButton 
                   @click="generateImage" 
                   :loading="isGeneratingImage"
+                  :disabled="isImageStopping"
                   icon="i-heroicons-photo-20-solid"
                   size="sm"
                 >
                   Generate Image
+                </UButton>
+
+                <UButton 
+                  v-if="isGeneratingImage"
+                  @click="stopImageGeneration" 
+                  :loading="isImageStopping"
+                  icon="i-heroicons-stop-20-solid"
+                  size="sm"
+                  color="red"
+                >
+                  Stop
                 </UButton>
 
                 <template v-if="currentImageUrl">
