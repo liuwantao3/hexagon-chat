@@ -1,5 +1,44 @@
+# Dependencies
+node_modules/
+
+# Nuxt build/dev output
+.nuxt/
+.output/
+dist/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+
+# Database
+*.sqlite
+*.sqlite3
+chroma_db/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Build cache
+.cache/
+.parcel-cache/
+
+# Test coverage
+coverage/
+
 # Audio files
 public/audio/
 
-# SVG files
+# SVG files (generated)
 *.svg
+
+# Misc
+nohup.out
