@@ -59,16 +59,21 @@ export const MINIMAX_MODELS = [
 ]
 
 export const GEMINI_MODELS = [
+  // Gemini 3 (Latest)
+  "gemini-3.1-pro",
+  "gemini-3-flash",
+  "gemini-3.1-flash-lite",
+  // Gemini 2.5
+  "gemini-2.5-pro",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  // Gemini 2.0
   "gemini-2.0-flash",
-  "gemini-2.0-flash-lite-preview-02-05",
-  "gemini-2.0-pro-exp",
-  "gemini-2.0-flash-thinking-exp-01-21",
-  "gemini-2.0-flash-thinking-exp-1219",
-  "gemini-2.0-flash-exp",
+  "gemini-2.0-flash-lite",
+  // Legacy
+  "gemini-1.5-pro",
   "gemini-1.5-flash",
   "gemini-1.5-flash-8b",
-  "gemini-1.5-pro",
-  "gemini-1.0-pro",
 ]
 
 export const GROQ_MODELS = [
@@ -112,15 +117,21 @@ export const VISION_MODELS: Record<string, string[]> = {
     'claude-3-haiku-20240307',
   ],
   [MODEL_FAMILIES.gemini]: [
+    // Gemini 3 (Latest)
+    'gemini-3.1-pro',
+    'gemini-3-flash',
+    'gemini-3.1-flash-lite',
+    // Gemini 2.5
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    // Gemini 2.0
     'gemini-2.0-flash',
-    'gemini-2.0-flash-exp',
-    'gemini-2.0-flash-lite-preview-02-05',
-    'gemini-2.0-pro-exp',
-    'gemini-2.0-flash-thinking-exp-01-21',
-    'gemini-2.0-flash-thinking-exp-1219',
+    'gemini-2.0-flash-lite',
+    // Legacy
+    'gemini-1.5-pro',
     'gemini-1.5-flash',
     'gemini-1.5-flash-8b',
-    'gemini-1.5-pro',
   ],
   [MODEL_FAMILIES.groq]: [
     'llama-3.1-70b-versatile',
