@@ -22,6 +22,79 @@ import { ChatOllama } from '@langchain/ollama'
 import { tool } from '@langchain/core/tools'
 import { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { transformImageContent } from '@/server/utils/transformImageContent'
+import type { ContextKeys } from '~/server/middleware/keys'
+import type { H3Event } from 'h3'
+
+function isUsageLimitError(error: any): boolean {
+    const errorStr = String(error?.message || error || '')
+    const statusCode = error?.status_code || error?.base_resp?.status_code
+    console.log('[isUsageLimitError] Checking error:', { errorStr, statusCode, full: error })
+    return statusCode === 2063 || 
+           statusCode === 2056 ||
+           statusCode === 1008 ||
+           errorStr.includes('token plan only supports') || 
+           errorStr.includes('usage limit exceeded') ||
+           errorStr.includes('insufficient balance')
+}
+
+function createChatModelWithFallback(model: string, family: string, event: H3Event): BaseChatModel {
+    const keys = event.context.keys
+    const familyValue = Object.entries(MODEL_FAMILIES).find(([key, val]) => val === family)?.[0]
+    
+    if (!familyValue || familyValue !== 'minimax') {
+        return createChatModel(model, family, event)
+    }
+
+    const minimaxKeys = keys.minimax as ContextKeys['minimax']
+    const primaryEndpoint = minimaxKeys?.endpoint || 'https://api.minimax.chat/v1'
+
+    try {
+        return createChatModel(model, family, event)
+    } catch (error: any) {
+        if (!minimaxKeys?.secondary?.key || !isUsageLimitError(error)) {
+            throw error
+        }
+        
+        console.log('[createChatModelWithFallback] Primary API usage limit reached, switching to secondary API')
+        
+        const secondaryData = {
+            ...minimaxKeys,
+            key: minimaxKeys.secondary.key,
+            endpoint: minimaxKeys.secondary.endpoint || primaryEndpoint
+        }
+        
+        event.context.keys = {
+            ...keys,
+            minimax: secondaryData
+        }
+        
+        return createChatModel(model, family, event)
+    }
+}
+
+function switchToSecondaryKeys(event: H3Event, family: string): boolean {
+    if (family !== MODEL_FAMILIES.minimax) return false
+    
+    const keys = event.context.keys
+    const minimaxKeys = keys.minimax as ContextKeys['minimax']
+    
+    if (!minimaxKeys?.secondary?.key) return false
+    
+    const primaryEndpoint = minimaxKeys?.endpoint || 'https://api.minimax.chat/v1'
+    const secondaryData = {
+        ...minimaxKeys,
+        key: minimaxKeys.secondary.key,
+        endpoint: minimaxKeys.secondary.endpoint || primaryEndpoint
+    }
+    
+    event.context.keys = {
+        ...keys,
+        minimax: secondaryData
+    }
+    
+    console.log('[switchToSecondaryKeys] Switched to secondary MiniMax API')
+    return true
+}
 
 interface RequestBody {
     knowledgebaseId: number
@@ -188,7 +261,7 @@ export default defineEventHandler(async (event) => {
             )
             return sendStream(event, readableStream)
         } else {
-            let llm = createChatModel(model, family, event)
+            let llm = createChatModelWithFallback(model, family, event)
 
             const mcpService = new McpService()
             const normalizedTools = await mcpService.listTools()
@@ -246,102 +319,124 @@ Available tools: ${toolDescriptions}`
                 }
             }
 
-            if (!stream) {
-                const response = await llm.invoke(transformMessages(finalMessages))
-                console.log("from non-stream:", response)
-                return {
-                    message: {
-                        role: 'assistant',
-                        content: response?.content,
-                    },
-                }
-            }
-
-            const response = await llm?.stream(
-                finalMessages.map((message: RequestBody['messages'][number]) => {
-                    let content: string | any[] = message.content
-
-                    // Check if message.content is an array (contains text and/or image)
-                    if (Array.isArray(message.content)) {
-                        console.log("Transforming image content for family:", family)
-                        try {
-                            content = transformImageContent(message.content, family)
-                        } catch (error) {
-                            console.log("Error parsing array content:", message.content, error)
-                        }
-                    }
-                    return [message.role, content]
-                })
-            )
-
-            console.log(response)
-
-            const readableStream = Readable.from(
-                (async function* () {
-                    let gathered = undefined
-
-                    for await (const chunk of response) {
-                        gathered = gathered !== undefined ? concat(gathered, chunk) : chunk
-
-                        let content = chunk?.content
-
-                        // Handle array of text_delta objects
-                        if (Array.isArray(content)) {
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            content = content
-                                .filter((item: any) => item.type === 'text_delta')
-                                .map((item: any) => item.text)
-                                .join('')
-                        }
-
-                        const message = {
+            // Retry logic for MiniMax usage limit
+            let lastError: any = null
+            let usedSecondary = false
+            
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    if (!stream) {
+                        const response = await llm.invoke(transformMessages(finalMessages))
+                        console.log("from non-stream:", response)
+                        return {
                             message: {
                                 role: 'assistant',
-                                content: content,
+                                content: response?.content,
                             },
                         }
-                        yield `${JSON.stringify(message)} \n\n`
                     }
 
-                    // Handle tool calls - execute and return results
-                    const toolCalls = gathered?.tool_calls ?? []
-                    if (toolCalls.length > 0) {
-                        console.log(`[CodeAgent] Executing ${toolCalls.length} tool call(s)`)
-                        
-                        // Set API keys for tools that need them
-                        const keys = event.context.keys
-                        if (keys?.minimax) {
-                            setImageToolKeys(keys.minimax.key, keys.minimax.endpoint)
-                        }
+                    // Simple streaming with error handling
+                    try {
+                        const response = await llm.stream(
+                            finalMessages.map((message: RequestBody['messages'][number]) => {
+                                let content: string | any[] = message.content
+                                if (Array.isArray(message.content)) {
+                                    try {
+                                        content = transformImageContent(message.content, family)
+                                    } catch (error) {
+                                        console.log("Error parsing array content:", message.content, error)
+                                    }
+                                }
+                                return [message.role, content]
+                            })
+                        )
+                        console.log(response)
+
+                        // Transform AIMessageChunk to string for Readable.from
+                        const readableStream = Readable.from(
+                            (async function* () {
+                                let gathered: any = null
+                                for await (const chunk of response) {
+                                    gathered = gathered ? concat(gathered, chunk) : chunk
+                                    let content = chunk?.content
+                                    if (Array.isArray(content)) {
+                                        content = content
+                                            .filter((item: any) => item.type === 'text_delta')
+                                            .map((item: any) => item.text)
+                                            .join('')
+                                    }
+                                    const message = {
+                                        message: {
+                                            role: 'assistant',
+                                            content: content,
+                                        },
+                                    }
+                                    yield `${JSON.stringify(message)} \n\n`
+                                }
+
+                                    const toolCalls = gathered?.tool_calls ?? []
+                                    if (toolCalls.length > 0) {
+                                        console.log(`[CodeAgent] Executing ${toolCalls.length} tool call(s)`)
+                                        const keys = event.context.keys
+                                        if (keys?.minimax) {
+                                            setImageToolKeys(keys.minimax.key, keys.minimax.endpoint, keys.minimax.secondary)
+                                        }
+                                    }
+
+                                    for (const toolCall of toolCalls) {
+                                        console.log('Tool call: ', toolCall)
+                                        const selectedTool = toolsMap[toolCall.name]
+                                        if (selectedTool) {
+                                            const result = await selectedTool.invoke(toolCall)
+                                            const message = {
+                                                message: {
+                                                    role: 'user',
+                                                    toolResult: true,
+                                                    toolCallId: result.tool_call_id,
+                                                    content: result.content,
+                                                },
+                                            }
+                                            yield `${JSON.stringify(message)} \n\n`
+                                        }
+                                    }
+                            })()
+                        )
+                        return sendStream(event, readableStream)
+                    } catch (e: any) {
+                        console.log('[Chat] Stream error:', e.message)
+                        throw e
                     }
-
-                    for (const toolCall of toolCalls) {
-                        console.log('Tool call: ', toolCall)
-                        const selectedTool = toolsMap[toolCall.name]
-
-                        if (selectedTool) {
-                            const result = await selectedTool.invoke(toolCall)
-                            console.log('Tool result: ', result)
-
-                            const message = {
-                                message: {
-                                    role: 'user',
-                                    toolResult: true,
-                                    toolCallId: result.tool_call_id,
-                                    content: result.content,
-                                },
-                            }
-
-                            yield `${JSON.stringify(message)} \n\n`
-                        }
+                } catch (error: any) {
+                    lastError = error
+                    console.log('[Chat] Error:', error.message)
+                    
+                    // Only retry for MiniMax usage limit errors
+                    if (!isUsageLimitError(error) || family !== MODEL_FAMILIES.minimax) {
+                        throw error
                     }
-                })()
-            )
-
-            return sendStream(event, readableStream)
+                    
+                    // Try secondary API
+                    if (!usedSecondary && switchToSecondaryKeys(event, family)) {
+                        console.log('[Chat] Retrying with secondary API...')
+                        llm = createChatModel(model, family, event)
+                        usedSecondary = true
+                        continue
+                    }
+                    
+                    throw error
+                }
+            }
+            
+            throw lastError
         }
-    } catch (err) {
+    } catch (err: any) {
         console.error('Error in event handler:', err) // Log the error for debugging
+        console.error('Error details:', { 
+            message: err?.message, 
+            status_code: err?.status_code,
+            base_resp: err?.base_resp 
+        })
         throw createError({
             statusCode: 500,
             statusMessage: 'Internal Server Error',

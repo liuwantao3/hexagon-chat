@@ -40,6 +40,8 @@ const formData = reactive({
   models: props.providerData?.models?.join(', ') || '',
   chatModels: props.providerData?.chatSettings?.models?.join(', ') || '',
   attachedMessagesCount: props.providerData?.chatSettings?.attachedMessagesCount || 10,
+  secondaryKey: props.providerData?.secondary?.key || '',
+  secondaryEndpoint: props.providerData?.secondary?.endpoint || '',
 })
 
 const schema = computed(() => {
@@ -72,6 +74,13 @@ function onSubmit() {
     data.deploymentName = formData.deploymentName
     data.endpoint = endpoint
   }
+
+  if (props.providerKey === 'minimax' && formData.secondaryKey) {
+    data.secondary = {
+      key: formData.secondaryKey,
+      endpoint: formData.secondaryEndpoint || undefined
+    }
+  }
   
   props.onUpdate?.(data)
   props.onClose?.()
@@ -97,6 +106,18 @@ function onSubmit() {
         <UFormGroup v-if="providerKey !== 'azureOpenai'" :label="t('settings.endpoint')" name="endpoint" class="mb-4" :hint="t('global.optional')">
           <UInput v-model.trim="formData.endpoint" size="lg" :placeholder="provider.defaultEndpoint || 'https://...'" />
         </UFormGroup>
+
+        <template v-if="providerKey === 'minimax'">
+          <div class="border-t mt-4 pt-4 mb-4">
+            <h6 class="font-semibold mb-2 text-sm text-muted">{{ t('settings.secondaryApi') }}</h6>
+          </div>
+          <UFormGroup :label="t('settings.secondaryApiKey')" name="secondaryKey" class="mb-4" :hint="t('global.optional')">
+            <UInput v-model.trim="formData.secondaryKey" size="lg" type="password" :placeholder="t('settings.secondaryApiKeyPlaceholder')" />
+          </UFormGroup>
+          <UFormGroup :label="t('settings.secondaryEndpoint')" name="secondaryEndpoint" class="mb-4" :hint="t('global.optional')">
+            <UInput v-model.trim="formData.secondaryEndpoint" size="lg" placeholder="https://api.minimax.chat/v1" />
+          </UFormGroup>
+        </template>
         
         <UFormGroup v-if="providerKey === 'azureOpenai'" :label="t('settings.endpoint')" name="endpoint" class="mb-4" :hint="t('global.optional')">
           <UInput v-model.trim="formData.endpoint" size="lg" placeholder="https://your-resource.openai.azure.com" />

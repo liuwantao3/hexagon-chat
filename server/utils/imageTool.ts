@@ -3,10 +3,24 @@ import { z } from 'zod'
 
 let currentApiKey: string | undefined = undefined
 let currentEndpoint: string | undefined = undefined
+let secondaryApiKey: string | undefined = undefined
+let secondaryEndpoint: string | undefined = undefined
 
-export function setImageToolKeys(apiKey?: string, endpoint?: string) {
+export function setImageToolKeys(apiKey?: string, endpoint?: string, secondary?: { key?: string; endpoint?: string }) {
     currentApiKey = apiKey
     currentEndpoint = endpoint
+    secondaryApiKey = secondary?.key
+    secondaryEndpoint = secondary?.endpoint
+}
+
+function isUsageLimitError(error: any): boolean {
+    return error?.base_resp?.status_code === 2063 || 
+           error?.base_resp?.status_code === 2056 ||
+           error?.base_resp?.status_code === 1008 ||
+           error?.status_code === 2063 ||
+           error?.status_code === 2056 ||
+           error?.status_code === 1008 ||
+           (typeof error === 'string' && (error.includes('token plan only supports') || error.includes('usage limit exceeded') || error.includes('insufficient balance')))
 }
 
 const imageSchema = z.object({
@@ -61,12 +75,14 @@ export const imageTool = tool(
             })
         }
 
+        const primaryEndpoint = currentEndpoint || 'https://api.minimaxi.com'
+
         try {
             const result = await generateImage(input.prompt, apiKey, {
                 aspect_ratio: input.aspect_ratio,
                 n: input.n,
                 model: input.model
-            }, currentEndpoint)
+            }, primaryEndpoint)
 
             console.log('[ImageTool] Generated', result.data?.image_urls?.length || 0, 'images')
 
@@ -77,7 +93,35 @@ export const imageTool = tool(
                 failedCount: result.metadata?.failed_count || 0
             })
         } catch (error: any) {
-            console.error('[ImageTool] Error:', error.message)
+            console.error('[ImageTool] Primary API error:', error.message)
+
+            if (secondaryApiKey && isUsageLimitError(error)) {
+                console.log('[ImageTool] Primary API usage limit reached, switching to secondary API')
+                const secondaryEp = secondaryEndpoint || primaryEndpoint
+                try {
+                    const result = await generateImage(input.prompt, secondaryApiKey, {
+                        aspect_ratio: input.aspect_ratio,
+                        n: input.n,
+                        model: input.model
+                    }, secondaryEp)
+
+                    console.log('[ImageTool] Secondary API generated', result.data?.image_urls?.length || 0, 'images')
+
+                    return JSON.stringify({
+                        imageUrls: result.data?.image_urls || [],
+                        taskId: result.id,
+                        successCount: result.metadata?.success_count || 0,
+                        failedCount: result.metadata?.failed_count || 0
+                    })
+                } catch (secondaryError: any) {
+                    console.error('[ImageTool] Secondary API error:', secondaryError.message)
+                    return JSON.stringify({
+                        error: secondaryError.message || 'Image generation failed',
+                        imageUrls: []
+                    })
+                }
+            }
+
             return JSON.stringify({
                 error: error.message || 'Image generation failed',
                 imageUrls: []

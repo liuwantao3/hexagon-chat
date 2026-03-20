@@ -125,9 +125,15 @@ const emotionOptions = [
   { value: 'calm', label: 'Calm' }
 ]
 
+const ttsModelOptions = [
+  { value: 'speech-2.8-hd', label: 'speech-2.8-hd (High Quality, with timestamps)' },
+  { value: 'speech-01-turbo', label: 'speech-01-turbo (Fast, no timestamps)' }
+]
+
 const selectedVoice = useStorage('story-voice', 'Chinese (Mandarin)_Lyrical_Voice')
 const selectedEmotion = useStorage('story-emotion', 'happy')
 const selectedVoiceSpeed = useStorage('story-voice-speed', 1)
+const selectedTtsModel = useStorage('story-tts-model', 'speech-2.8-hd')
 
 // Image generation state
 const isGeneratingImage = ref(false)
@@ -530,17 +536,60 @@ async function generateVoice() {
 
   isGeneratingVoice.value = true
   try {
-    const res = await $fetch<{ audio_hex: string; sentence_timestamps: any[] }>('/api/audio/speech_async', {
-      method: 'POST',
-      body: {
-        text: generatedStory.value.content,
-        voice_id: selectedVoice.value,
-        emotion: selectedEmotion.value,
-        speed: selectedVoiceSpeed.value,
-        format: 'mp3'
-      },
-      headers: getKeysHeader()
-    })
+    const modelToUse = selectedTtsModel.value
+    
+    // speech-2.8-hd supports timestamps (async), others use sync endpoint
+    const needsTimestamps = modelToUse === 'speech-2.8-hd'
+    const endpoint = needsTimestamps ? '/api/audio/speech_async' : '/api/audio/speech'
+    
+    console.log('Using TTS:', endpoint, 'model:', modelToUse)
+    
+    let res: any
+    
+    if (needsTimestamps) {
+      // Use async endpoint for timestamps
+      res = await $fetch<{ audio_hex: string; sentence_timestamps: any[] }>(endpoint, {
+        method: 'POST',
+        body: {
+          text: generatedStory.value.content,
+          voice_id: selectedVoice.value,
+          emotion: selectedEmotion.value,
+          speed: selectedVoiceSpeed.value,
+          model: modelToUse,
+          format: 'mp3'
+        },
+        headers: getKeysHeader()
+      })
+      currentAudioTimestamps.value = res.sentence_timestamps
+    } else {
+      // Use sync endpoint for faster response (no timestamps)
+      const audioRes = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getKeysHeader()
+        },
+        body: JSON.stringify({
+          text: generatedStory.value.content,
+          voice_id: selectedVoice.value,
+          emotion: selectedEmotion.value,
+          speed: selectedVoiceSpeed.value,
+          model: modelToUse,
+          format: 'mp3'
+        })
+      })
+      
+      if (!audioRes.ok) {
+        const error = await audioRes.json().catch(() => ({}))
+        throw new Error(error.message || 'TTS failed')
+      }
+      
+      const audioBuffer = await audioRes.arrayBuffer()
+      const uint8Array = new Uint8Array(audioBuffer)
+      const hex = Array.from(uint8Array).map(b => b.toString(16).padStart(2, '0')).join('')
+      res = { audio_hex: hex, sentence_timestamps: [] }
+      currentAudioTimestamps.value = null
+    }
 
     const audioBuffer = hexToUint8Array(res.audio_hex)
     const blob = new Blob([audioBuffer], { type: 'audio/mpeg' })
@@ -548,10 +597,9 @@ async function generateVoice() {
       URL.revokeObjectURL(currentAudioUrl.value)
     }
     currentAudioUrl.value = URL.createObjectURL(blob)
-    currentAudioTimestamps.value = res.sentence_timestamps
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to generate voice:', e)
-    toast.add({ title: 'Failed to generate voice. Please check MiniMax API key.', color: 'red' })
+    toast.add({ title: 'Failed to generate voice: ' + e.message, color: 'red' })
   } finally {
     isGeneratingVoice.value = false
   }
@@ -900,6 +948,25 @@ watch(() => chatModels.value, (newModels) => {
                 <div>
                   <label class="block text-xs text-gray-500 mb-1">Speed: {{ selectedVoiceSpeed }}</label>
                   <URange v-model="selectedVoiceSpeed" :min="0.5" :max="2" :step="0.1" size="sm" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">TTS Model</label>
+                  <USelect
+                    v-model="selectedTtsModel"
+                    :options="ttsModelOptions"
+                    option-label="label"
+                    option-value="value"
+                    size="sm"
+                    class="w-full"
+                  />
+                </div>
+                <div class="flex items-center pt-4">
+                  <span class="text-sm text-gray-500">
+                    {{ selectedTtsModel === 'speech-2.8-hd' ? '✓ With timestamps' : '○ No timestamps' }}
+                  </span>
                 </div>
               </div>
 

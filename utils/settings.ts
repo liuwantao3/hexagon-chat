@@ -37,6 +37,10 @@ export const DEFAULT_KEYS_STORE: ContextKeys = {
     key: getLocalValue('keys.minimax_api_key'),
     endpoint: getLocalValue('keys.minimax_api_host'),
     models: [],
+    secondary: {
+      key: getLocalValue('keys.minimax_secondary_api_key'),
+      endpoint: getLocalValue('keys.minimax_secondary_api_host'),
+    },
   },
   gemini: {
     key: getLocalValue('keys.gemini_api_key'),

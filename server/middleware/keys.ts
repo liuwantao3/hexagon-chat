@@ -40,6 +40,10 @@ export interface ContextKeys {
     key: string
     endpoint: string
     models: string[]
+    secondary?: {
+      key: string
+      endpoint?: string
+    }
     chatSettings?: ChatSettings
   },
   gemini: {

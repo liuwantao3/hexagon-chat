@@ -8,6 +8,45 @@ const imageSchema = z.object({
     model: z.enum(['image-01', 'image-01-live']).optional().describe('Model to use'),
 })
 
+interface MiniMaxKeys {
+    key: string
+    endpoint?: string
+    secondary?: {
+        key: string
+        endpoint?: string
+    }
+}
+
+function isUsageLimitError(error: any): boolean {
+    return error?.base_resp?.status_code === 2063 || 
+           error?.base_resp?.status_code === 2056 ||
+           error?.base_resp?.status_code === 1008 ||
+           error?.status_code === 2063 ||
+           error?.status_code === 2056 ||
+           error?.status_code === 1008 ||
+           (typeof error === 'string' && (error.includes('token plan only supports') || error.includes('usage limit exceeded') || error.includes('insufficient balance')))
+}
+
+async function withMiniMaxFallback<T>(
+    keys: MiniMaxKeys,
+    primaryOnlyFn: (key: string, endpoint: string) => Promise<T>,
+    fallbackFn: (key: string, endpoint: string) => Promise<T>
+): Promise<T> {
+    const primaryEndpoint = keys.endpoint || 'https://api.minimaxi.com'
+    
+    try {
+        return await primaryOnlyFn(keys.key, primaryEndpoint)
+    } catch (error: any) {
+        if (!keys.secondary?.key || !isUsageLimitError(error)) {
+            throw error
+        }
+        
+        const secondaryEndpoint = keys.secondary.endpoint || primaryEndpoint
+        console.log('Primary API usage limit reached, switching to secondary API')
+        return fallbackFn(keys.secondary.key, secondaryEndpoint)
+    }
+}
+
 async function generateImage(prompt: string, apiKey: string, options: {
     aspect_ratio?: string
     n?: number
@@ -52,9 +91,9 @@ export default defineEventHandler(async (event) => {
     }
 
     const keys = event.context.keys
-    const apiKey = keys?.minimax?.key
+    const minimaxKeys = keys?.minimax
 
-    if (!apiKey) {
+    if (!minimaxKeys?.key) {
         throw createError({
             statusCode: 401,
             statusMessage: 'MiniMax API key not configured'
@@ -62,11 +101,15 @@ export default defineEventHandler(async (event) => {
     }
 
     try {
-        const result = await generateImage(prompt, apiKey, {
-            aspect_ratio,
-            n,
-            model
-        }, keys?.minimax?.endpoint)
+        const result = await withMiniMaxFallback(
+            minimaxKeys,
+            async (apiKey, endpoint) => {
+                return await generateImage(prompt, apiKey, { aspect_ratio, n, model }, endpoint)
+            },
+            async (apiKey, endpoint) => {
+                return await generateImage(prompt, apiKey, { aspect_ratio, n, model }, endpoint)
+            }
+        )
 
         return JSON.stringify({
             imageUrls: result.data?.image_urls || [],

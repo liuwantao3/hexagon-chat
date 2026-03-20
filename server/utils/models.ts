@@ -123,7 +123,7 @@ function initChat(family: string, modelName: string, params: InitChatParams, isC
       apiVersion: "v1beta",
       apiKey: params.key,
       modelName: modelName,
-      baseUrl: endpoint,
+      baseUrl: getProxyEndpoint(params.endpoint, params?.proxy || false),
     })
   }
 
