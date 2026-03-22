@@ -26,6 +26,7 @@ model User {
 
   knowledgeBases KnowledgeBase[]
   Story          Story[]
+  LearningParagraph LearningParagraph[]
 }
 
 model KnowledgeBase {
@@ -79,4 +80,18 @@ model Story {
   image_url  String?
   sentence_timestamps String?
   User       User?    @relation(fields: [user_id], references: [id])
+}
+
+model LearningParagraph {
+  id             Int       @id @default(autoincrement())
+  theme          String
+  nouns          String
+  content        String
+  wordCount      Int       @default(0)
+  status         String    @default("draft")
+  orderIndex     Int       @default(0)
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+  user_id        Int?
+  User           User?     @relation(fields: [user_id], references: [id])
 }
