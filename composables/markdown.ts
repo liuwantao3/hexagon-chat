@@ -153,3 +153,60 @@ export function useMarkdown() {
 
   return md
 }
+
+// Handle click events for run/save/fold buttons
+if (typeof window !== 'undefined') {
+  document.addEventListener('click', (e: Event) => {
+    const target = e.target as HTMLElement
+    
+    const runBtn = target.closest('.run-code-btn') as HTMLElement
+    const saveBtn = target.closest('.save-code-btn') as HTMLElement
+    const foldBtn = target.closest('.fold-code-btn') as HTMLElement
+    const codeBlock = target.closest('.executable-code-block') as HTMLElement
+    
+    if (runBtn && codeBlock) {
+      e.preventDefault()
+      e.stopPropagation()
+      
+      const pre = codeBlock.querySelector('pre') as HTMLPreElement
+      const cellId = pre?.dataset.cellId || ''
+      const language = pre?.dataset.language || 'javascript'
+      const code = pre?.textContent || ''
+      
+      sourceCodes[cellId] = { content: code, language }
+      
+      console.log('Running code:', { cellId, language, codeLength: code.length })
+      
+      if (window.CodeExecutionHandler) {
+        window.CodeExecutionHandler(code, language, cellId)
+      } else {
+        console.warn('CodeExecutionHandler not defined')
+      }
+    }
+    
+    if (saveBtn && codeBlock) {
+      e.preventDefault()
+      e.stopPropagation()
+      
+      const pre = codeBlock.querySelector('pre') as HTMLPreElement
+      const cellId = pre?.dataset.cellId || ''
+      const language = pre?.dataset.language || 'javascript'
+      const code = pre?.textContent || ''
+      
+      sourceCodes[cellId] = { content: code, language }
+      
+      const badge = codeBlock.querySelector('.language-badge') as HTMLElement
+      if (badge) badge.textContent = language
+    }
+    
+    if (foldBtn && codeBlock) {
+      e.preventDefault()
+      e.stopPropagation()
+      
+      const pre = codeBlock.querySelector('pre') as HTMLPreElement
+      if (pre) {
+        pre.classList.toggle('hidden')
+      }
+    }
+  })
+}
