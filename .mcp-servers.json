@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "pptx-maker": {
+      "command": "python",
+      "args": ["/Users/arctic/hexagon-chat/skills/pptx-maker/server.py"]
+    }
+  }
+}

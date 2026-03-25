@@ -13,6 +13,7 @@ const props = defineProps<{
 const emits = defineEmits<{
   resend: [message: ChatMessage]
   remove: [message: ChatMessage]
+  openPptPreview: [previews: any[], totalSlides: number]
 }>()
 
 const markdown = useMarkdown()
@@ -103,6 +104,18 @@ const imageUrls = computed(() => {
 const imageError = computed(() => {
   return toolResultContent.value?.error
 })
+
+const isPptPreviewResult = computed(() => {
+  return toolResultContent.value?.previews && toolResultContent.value.previews.length > 0
+})
+
+const pptPreviews = computed(() => {
+  return toolResultContent.value?.previews || []
+})
+
+const pptTotalSlides = computed(() => {
+  return toolResultContent.value?.total_slides || 0
+})
 </script>
 
 <template>
@@ -145,6 +158,30 @@ const imageError = computed(() => {
                 :alt="`Generated image ${index + 1}`"
                 class="max-w-full h-auto rounded-lg shadow-md"
               />
+            </div>
+            <!-- PPT Preview Display -->
+            <div v-else-if="isPptPreviewResult" class="mt-2">
+              <div class="flex items-center justify-between bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 rounded-lg p-3 border border-blue-200 dark:border-blue-700">
+                <div class="flex items-center gap-3">
+                  <div class="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+                    <span class="text-white font-bold text-lg">{{ pptTotalSlides }}</span>
+                  </div>
+                  <div>
+                    <p class="text-sm font-medium text-blue-700 dark:text-blue-300">Presentation Ready</p>
+                    <p class="text-xs text-blue-500 dark:text-blue-400">{{ pptPreviews.length }} slides previewed</p>
+                  </div>
+                </div>
+                <button 
+                  class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                  @click="emit('openPptPreview', pptPreviews, pptTotalSlides)"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  Preview
+                </button>
+              </div>
             </div>
             <!-- Error Display -->
             <div v-else-if="imageError" class="text-red-500 text-xs">

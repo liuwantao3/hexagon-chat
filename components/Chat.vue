@@ -4,9 +4,10 @@ import type { KnowledgeBase } from '@prisma/client'
 import { loadOllamaInstructions, loadKnowledgeBases } from '@/utils/settings'
 import { type ChatBoxFormData } from '@/components/ChatInputBox.vue'
 import { type ChatSessionSettings } from '~/pages/chat/index.vue'
-import { ChatSettings } from '#components'
+import { ChatSettings, SkillMarketplace } from '#components'
 import type { ChatMessage } from '~/types/chat'
 import { chatDefaultSettings } from '~/composables/store'
+import PptPreview from '~/components/PptPreview.vue'
 
 type Instruction = Awaited<ReturnType<typeof loadOllamaInstructions>>[number]
 
@@ -80,6 +81,52 @@ const codeAgentEnabled = computed({
   get: () => chatDefaultSettings.value.codeAgentEnabled || false,
   set: (val) => { chatDefaultSettings.value.codeAgentEnabled = val },
 })
+
+// Skills selector
+const selectedSkills = computed({
+  get: () => chatDefaultSettings.value.skills || [],
+  set: (val) => { chatDefaultSettings.value.skills = val },
+})
+
+// Available skills
+const availableSkills = ref<Array<{ name: string, description: string, icon: string }>>([])
+
+const fetchSkills = async () => {
+  try {
+    const res = await $fetch('/api/skills')
+    availableSkills.value = res.skills
+  } catch (e) {
+    console.error('Failed to fetch skills:', e)
+  }
+}
+
+// Marketplace modal
+const showMarketplace = ref(false)
+
+// PPT Preview modal
+const showPptPreview = ref(false)
+const pptPreviewData = ref<{ previews: any[], totalSlides: number }>({ previews: [], totalSlides: 0 })
+
+const openMarketplace = () => {
+  showMarketplace.value = true
+}
+
+const closeMarketplace = () => {
+  showMarketplace.value = false
+}
+
+const onSkillInstalled = (skillName: string) => {
+  fetchSkills()
+}
+
+const openPptPreview = (previews: any[], totalSlides: number) => {
+  pptPreviewData.value = { previews, totalSlides }
+  showPptPreview.value = true
+}
+
+const closePptPreview = () => {
+  showPptPreview.value = false
+}
 
 // Method to toggle stripping <think> section
 const toggleStripThinkSection = () => {
@@ -207,6 +254,7 @@ const onSend = async (data: ChatBoxFormData) => {
           //sessionId: sessionInfo.value?.id ?? null,
           timestamp,
           codeAgentEnabled: codeAgentEnabled.value,
+          skills: selectedSkills.value,
         },
       })
     }
@@ -237,7 +285,7 @@ onReceivedMessage(data => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadOllamaInstructions(), loadKnowledgeBases()])
+  await Promise.all([loadOllamaInstructions(), loadKnowledgeBases(), fetchSkills()])
     .then(([res1, res2]) => {
       instructions.push(...res1)
       knowledgeBases.push(...res2)
@@ -372,7 +420,8 @@ async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
                          :message :sending="sendingCount > 0" :show-toggle-button="models.length > 1"
                          class="my-2"
                          :strip-think-section="stripThinkSection"
-                         @resend="onResend" @remove="onRemove" />
+                         @resend="onResend" @remove="onRemove"
+                         @open-ppt-preview="openPptPreview" />
       </div>
       <div class="shrink-0 p-4 border-t border-gray-200 dark:border-gray-800">
         <ChatInputBox ref="chatInputBoxRef"
@@ -398,6 +447,41 @@ async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
                        @click="codeAgentEnabled = !codeAgentEnabled"
                        class="mr-4" />
             </UTooltip>
+            <!-- Skills Dropdown -->
+            <UPopover :popper="{ placement: 'top-start' }">
+              <UTooltip :text="selectedSkills.length ? `Skills: ${selectedSkills.join(', ')}` : 'Select Skills'" :popper="{ placement: 'top-start' }">
+                <UButton
+                         icon="i-heroicons-sparkles-20-solid"
+                         :color="selectedSkills.length ? 'primary' : 'gray'"
+                         class="mr-2" />
+              </UTooltip>
+              <template #panel>
+                <div class="p-4 w-72">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-sm font-medium">Select Skills</p>
+                    <UButton size="xs" variant="ghost" @click="openMarketplace">
+                      <UIcon name="i-heroicons-plus" class="mr-1" />
+                      Browse
+                    </UButton>
+                  </div>
+                  <div class="space-y-2 max-h-64 overflow-y-auto">
+                    <label v-for="skill in availableSkills" :key="skill.name" class="flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded">
+                      <UCheckbox
+                        :model-value="selectedSkills.includes(skill.name)"
+                        @update:model-value="(val) => { if (val) selectedSkills.push(skill.name); else selectedSkills = selectedSkills.filter(s => s !== skill.name) }"
+                      />
+                      <div class="flex-1">
+                        <span class="text-sm">{{ skill.icon }} {{ skill.name }}</span>
+                        <p class="text-xs text-gray-500">{{ skill.description }}</p>
+                      </div>
+                    </label>
+                    <p v-if="availableSkills.length === 0" class="text-sm text-gray-500 text-center py-4">
+                      No skills installed. Click "Browse" to install.
+                    </p>
+                  </div>
+                </div>
+              </template>
+            </UPopover>
             <UTooltip :text="t('chat.attachedMessagesCount')" :popper="{ placement: 'top-start' }">
               <div class="flex items-center cursor-pointer hover:text-primary-400" @click="onOpenSettings">
                 <UIcon name="i-material-symbols-history" class="mr-1"></UIcon>
@@ -408,5 +492,25 @@ async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
         </ChatInputBox>
       </div>
     </div>
+
+    <!-- Skill Marketplace Modal -->
+    <ClientOnly>
+      <SkillMarketplace
+        v-if="showMarketplace"
+        @close="closeMarketplace"
+        @install="onSkillInstalled"
+      />
+    </ClientOnly>
+
+    <!-- PPT Preview Modal -->
+    <ClientOnly>
+      <PptPreview
+        v-if="showPptPreview"
+        :previews="pptPreviewData.previews"
+        :total-slides="pptPreviewData.totalSlides"
+        path="/tmp/_pptx_maker/current.pptx"
+        @close="closePptPreview"
+      />
+    </ClientOnly>
   </div>
 </template>
