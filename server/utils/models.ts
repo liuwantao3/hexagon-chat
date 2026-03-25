@@ -32,8 +32,8 @@ export const createEmbeddings = (embeddingModelName: string, event: H3Event): Em
       configuration: {
         baseURL: getProxyEndpoint(keys.openai.endpoint, keys.openai.proxy),
       },
-      modelName: embeddingModelName,
-      openAIApiKey: keys.openai.key,
+      model: embeddingModelName,
+      apiKey: keys.openai.key,
     })
   } else if (GEMINI_EMBEDDING_MODELS.includes(embeddingModelName)) {
     console.log(`Creating embeddings for Gemini model: ${embeddingModelName}`)
@@ -65,14 +65,13 @@ function initChat(family: string, modelName: string, params: InitChatParams, isC
   if (family === MODEL_FAMILIES.openai || isCustomModel) {
     const baseURL = openaiApiFillPath(endpoint)
     return new ChatOpenAI({
+      model: modelName,
+      apiKey: params.key,
       configuration: { baseURL },
-      openAIApiKey: params.key,
-      modelName: modelName,
-    })
+    } as never)
   }
 
   if (family === MODEL_FAMILIES.azureOpenai && (isCustomModel || AZURE_OPENAI_GPT_MODELS.includes(modelName))) {
-
     console.log("Azure OpenAI Configuration:", {
       endpoint: endpoint,
       key: params.key,
@@ -81,13 +80,11 @@ function initChat(family: string, modelName: string, params: InitChatParams, isC
     })
 
     return new AzureChatOpenAI({
-      //azureOpenAIEndpoint: endpoint,
-      azureOpenAIApiInstanceName: endpoint,
-      azureOpenAIApiKey: params.key,
-      azureOpenAIApiDeploymentName: params.deploymentName,
-      modelName: modelName,
-      azureOpenAIApiVersion: "2025-01-01-preview"
-    })
+      apiKey: params.key,
+      model: modelName,
+      azureOpenAIApiVersion: "2025-01-01-preview",
+      deploymentName: params.deploymentName,
+    } as never)
   }
 
   if (family === MODEL_FAMILIES.anthropic && (isCustomModel || ANTHROPIC_MODELS.includes(modelName))) {
@@ -99,23 +96,21 @@ function initChat(family: string, modelName: string, params: InitChatParams, isC
   }
 
   if (family === MODEL_FAMILIES.moonshot && (isCustomModel || MOONSHOT_MODELS.includes(modelName))) {
-    // Reuse openai's sdk
     const endpoint = params.endpoint || "https://api.moonshot.cn/v1"
     return new ChatOpenAI({
+      model: modelName,
+      apiKey: params.key,
       configuration: { baseURL: openaiApiFillPath(endpoint) },
-      openAIApiKey: params.key,
-      modelName: modelName
-    })
+    } as never)
   }
 
   if (family === MODEL_FAMILIES.minimax && (isCustomModel || MINIMAX_MODELS.includes(modelName))) {
-    // MiniMax uses OpenAI-compatible API
     const endpoint = params.endpoint || "https://api.minimax.chat/v1"
     return new ChatOpenAI({
+      model: modelName,
+      apiKey: params.key,
       configuration: { baseURL: openaiApiFillPath(endpoint) },
-      openAIApiKey: params.key,
-      modelName: modelName
-    })
+    } as never)
   }
 
   if (family === MODEL_FAMILIES.gemini && (isCustomModel || GEMINI_MODELS.includes(modelName))) {
@@ -134,8 +129,7 @@ function initChat(family: string, modelName: string, params: InitChatParams, isC
     }
     return new ChatGroq({
       apiKey: params.key,
-      verbose: true,
-      modelName: modelName,
+      model: modelName,
     })
   }
 

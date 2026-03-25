@@ -1,13 +1,15 @@
 import { Document } from "@langchain/core/documents"
-import { BaseStoreInterface } from "@langchain/core/stores"
+import { BaseStore } from "@langchain/core/stores"
 import { Redis } from "ioredis"
 import { createRedisClient } from "@/server/store/redis"
 
-export class RedisDocstore implements BaseStoreInterface<string, Document> {
+export class RedisDocstore extends BaseStore<string, Document> {
+  lc_namespace: string[] = ["RedisDocstore"]
   _namespace: string
   _client: Redis
 
   constructor(namespace: string) {
+    super()
     this._namespace = namespace
     this._client = createRedisClient()
   }

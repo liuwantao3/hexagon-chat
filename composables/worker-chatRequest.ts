@@ -15,6 +15,7 @@ interface RequestData {
   stream: boolean
   timestamp: number
   codeAgentEnabled?: boolean
+  skills?: string[]
 }
 
 export type WorkerReceivedMessage =
@@ -72,6 +73,7 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
       messages: data.messages,
       stream: data.stream,
       codeAgentEnabled: data.codeAgentEnabled,
+      skills: data.skills,
     }),
     // body: {
     //   knowledgebaseId: data.knowledgebaseId,

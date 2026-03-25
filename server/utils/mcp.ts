@@ -39,7 +39,9 @@ export class McpService {
           const transport = new StdioClientTransport({
             command: serverConfig.command,
             args: serverConfig.args,
-            env: serverConfig.env
+            env: serverConfig.env,
+            timeout: 30000,
+            killTimeout: 10000,
           })
 
           const serverTools = await this.getToolsFromTransport(transport)
@@ -62,7 +64,8 @@ export class McpService {
       name: "chatollama-client",
       version: "1.0.0",
     }, {
-      capabilities: {}
+      capabilities: {},
+      protocolVersion: "2024-11-05",
     })
 
     await client.connect(transport)
@@ -87,7 +90,7 @@ export class McpService {
         }
       )
 
-      _tool.mcpSchema = t.inputSchema
+      ;(_tool as Record<string, unknown>).mcpSchema = t.inputSchema
 
       toolsMap[t.name] = _tool
       return _tool

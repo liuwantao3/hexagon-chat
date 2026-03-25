@@ -1,5 +1,5 @@
 import { Readable } from 'stream'
-import { formatDocumentsAsString } from "langchain/util/document"
+import { formatDocumentsAsString } from "@langchain/classic/util/document"
 import { PromptTemplate } from "@langchain/core/prompts"
 import { RunnableSequence } from "@langchain/core/runnables"
 // import { CohereRerank } from "@langchain/cohere"
@@ -9,7 +9,8 @@ import { BaseRetriever } from "@langchain/core/retrievers"
 import prisma from "@/server/utils/prisma"
 import { createChatModel, createEmbeddings } from '@/server/utils/models'
 import { createRetriever } from '@/server/retriever'
-import { AIMessage, BaseMessage, BaseMessageLike, HumanMessage, ToolMessage } from '@langchain/core/messages'
+import { AIMessage, BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages'
+import type { BaseMessageLike } from '@langchain/core/messages'
 import { resolveCoreference } from '~/server/coref'
 import { concat } from "@langchain/core/utils/stream"
 import { MODEL_FAMILIES } from '~/config'
@@ -24,6 +25,7 @@ import { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { transformImageContent } from '@/server/utils/transformImageContent'
 import type { ContextKeys } from '~/server/middleware/keys'
 import type { H3Event } from 'h3'
+import { skillLoader } from '@/server/skills'
 
 function isUsageLimitError(error: any): boolean {
     const errorStr = String(error?.message || error || '')
@@ -108,6 +110,7 @@ interface RequestBody {
     }[]
     stream: any
     codeAgentEnabled?: boolean
+    skills?: string[]
 }
 
 const SYSTEM_TEMPLATE = `Answer the user's question based on the context below.
@@ -158,7 +161,7 @@ const normalizeMessages = (messages: RequestBody['messages']): BaseMessage[] => 
 
 export default defineEventHandler(async (event) => {
     try {
-        const { knowledgebaseId, model, family, messages, stream, codeAgentEnabled } = await readBody<RequestBody>(event)
+        const { knowledgebaseId, model, family, messages, stream, codeAgentEnabled, skills } = await readBody<RequestBody>(event)
 
         console.log("model family stream", model, family, stream)
         console.log("codeAgentEnabled:", codeAgentEnabled)
@@ -265,9 +268,16 @@ export default defineEventHandler(async (event) => {
 
             const mcpService = new McpService()
             const normalizedTools = await mcpService.listTools()
-            
+
+            // Load skill tools and system prompts
+            await skillLoader.loadAll()
+            const skillTools = skills?.length ? skillLoader.getAllTools(skills) : []
+            const skillSystemPrompt = skills?.length ? skillLoader.getSystemPrompt(skills) : ''
+
             // Combine MCP tools with code execution tools (only if enabled)
-            const toolsToUse = codeAgentEnabled ? [...codeExecutionTools, ...svgTools, ...imageTools, ...normalizedTools] : normalizedTools
+            const toolsToUse = codeAgentEnabled
+                ? [...codeExecutionTools, ...svgTools, ...imageTools, ...normalizedTools, ...skillTools]
+                : [...normalizedTools, ...skillTools]
             const toolsMap = toolsToUse.reduce((acc, t) => {
                 acc[t.name] = t
                 return acc
@@ -300,10 +310,23 @@ Available tools: ${toolDescriptions}`
                     { role: 'system', content: codeAgentSystemPrompt, toolCallId: '', toolResult: false },
                     ...messages
                 ]
+            } else if (skillSystemPrompt) {
+                // Inject skill system prompts
+                const systemMessages = messages.filter(m => m.role === 'system')
+                const nonSystemMessages = messages.filter(m => m.role !== 'system')
+
+                const combinedSystemPrompt = skillSystemPrompt
+
+                finalMessages = [
+                    { role: 'system', content: combinedSystemPrompt, toolCallId: '', toolResult: false },
+                    ...systemMessages,
+                    ...nonSystemMessages
+                ]
             }
 
             console.log('[CodeAgent] Final messages count:', finalMessages.length)
-            
+            console.log('[Skills] Loaded skills:', skills, 'with', skillTools.length, 'tools')
+
             if (family === MODEL_FAMILIES.anthropic && toolsToUse?.length) {
                 if (llm?.bindTools) {
                     llm = llm.bindTools(toolsToUse) as BaseChatModel
@@ -311,7 +334,7 @@ Available tools: ${toolDescriptions}`
                 }
             } else if (llm instanceof ChatOllama) {
                 // Ollama with tools - handled separately if needed
-            } else if (normalizedTools?.length || (codeAgentEnabled && codeExecutionTools.length)) {
+            } else if (normalizedTools?.length || (codeAgentEnabled && codeExecutionTools.length) || skillTools.length) {
                 // For other models that support function calling
                 if (llm?.bindTools) {
                     llm = llm.bindTools(toolsToUse) as BaseChatModel
@@ -338,20 +361,28 @@ Available tools: ${toolDescriptions}`
 
                     // Simple streaming with error handling
                     try {
-                        const response = await llm.stream(
-                            finalMessages.map((message: RequestBody['messages'][number]) => {
-                                let content: string | any[] = message.content
-                                if (Array.isArray(message.content)) {
-                                    try {
-                                        content = transformImageContent(message.content, family)
-                                    } catch (error) {
-                                        console.log("Error parsing array content:", message.content, error)
-                                    }
+                        const transformedMessages = finalMessages.map((message: RequestBody['messages'][number]) => {
+                            let content: string | any[] = message.content
+                            if (Array.isArray(message.content)) {
+                                try {
+                                    content = transformImageContent(message.content, family)
+                                } catch (error) {
+                                    console.log("Error parsing array content:", message.content, error)
                                 }
-                                return [message.role, content]
-                            })
-                        )
-                        console.log(response)
+                            }
+                            return [message.role, content]
+                        })
+
+                        console.log('[Chat] Starting stream for model:', family, 'with', skillTools.length, 'tools')
+
+                        const response = await Promise.race([
+                            llm.stream(transformedMessages),
+                            new Promise((_, reject) => 
+                                setTimeout(() => reject(new Error('Stream timeout after 60 seconds')), 60000)
+                            )
+                        ])
+
+                        console.log('[Chat] Stream response received:', !!response)
 
                         // Transform AIMessageChunk to string for Readable.from
                         const readableStream = Readable.from(

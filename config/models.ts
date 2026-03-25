@@ -51,7 +51,8 @@ export const ANTHROPIC_MODELS = [
 export const MOONSHOT_MODELS = [
   "moonshot-v1-8k",
   "moonshot-v1-32k",
-  "moonshot-v1-128k"
+  "moonshot-v1-128k",
+  "kimi-k2.5"
 ]
 
 export const MINIMAX_MODELS = [

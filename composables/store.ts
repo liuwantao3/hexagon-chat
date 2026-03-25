@@ -6,6 +6,7 @@ export const chatDefaultSettings = useStorage('chat-default-settings', {
   attachedMessagesCount: DEFAULT_ATTACHED_MESSAGES_COUNT,
   stripThinkSection: false,
   codeAgentEnabled: false,
+  skills: [] as string[],
 })
 
 // incompatible with old data format
