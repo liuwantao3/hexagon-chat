@@ -1,20 +1,20 @@
 import {
-  Tool as GenerativeAITool,
-  ToolConfig,
+  type Tool as GenerativeAITool,
+  type ToolConfig,
   FunctionCallingMode,
-  FunctionDeclaration,
-  FunctionDeclarationsTool,
-  FunctionDeclarationSchema,
+  type FunctionDeclaration,
+  type FunctionDeclarationsTool,
+  type FunctionDeclarationSchema,
 } from "@google/generative-ai"
-import { ToolChoice } from "@langchain/core/language_models/chat_models"
-import { StructuredToolInterface } from "@langchain/core/tools"
+import type { ToolChoice } from "@langchain/core/language_models/chat_models"
+import type { StructuredToolInterface } from "@langchain/core/tools"
 import { isLangChainTool } from "@langchain/core/utils/function_calling"
 import {
   isOpenAITool,
-  ToolDefinition,
+  type ToolDefinition,
 } from "@langchain/core/language_models/base"
 import { convertToGenerativeAITools } from "./common.js"
-import { GoogleGenerativeAIToolType } from "../types.js"
+import type { GoogleGenerativeAIToolType } from "../types.js"
 import { removeAdditionalProperties } from "./zod_to_genai_parameters.js"
 
 export function convertToolsToGenAI(

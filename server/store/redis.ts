@@ -1,4 +1,4 @@
-import { Redis, RedisOptions } from "ioredis";
+import { Redis, type RedisOptions } from "ioredis";
 
 export const createRedisClient = () => {
   const options: RedisOptions = {

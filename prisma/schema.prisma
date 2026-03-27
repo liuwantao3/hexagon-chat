@@ -95,3 +95,14 @@ model LearningParagraph {
   user_id        Int?
   User           User?     @relation(fields: [user_id], references: [id])
 }
+
+model SkillConfig {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  skillName String
+  config    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, skillName])
+}

@@ -24,6 +24,9 @@ const visionModels = computed(() => {
   if (keysStore.value.minimax?.key) {
     models.push({ label: 'MiniMax Vision', value: 'minimax', family: 'minimax' })
   }
+  if (keysStore.value.moonshot?.key) {
+    models.push({ label: 'Moonshot Vision', value: 'moonshot', family: 'moonshot' })
+  }
   
   return models
 })

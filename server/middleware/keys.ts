@@ -5,6 +5,24 @@ export interface ChatSettings {
   attachedMessagesCount: number
 }
 
+export interface SkillConfigField {
+  key: string
+  type: 'password' | 'text' | 'select' | 'toggle'
+  label: string
+  required?: boolean
+  placeholder?: string
+  options?: string[]
+  default?: string | boolean
+}
+
+export interface SkillConfigSchema {
+  fields: SkillConfigField[]
+}
+
+export interface SkillConfigs {
+  [skillName: string]: Record<string, string | boolean>
+}
+
 export interface ContextKeys {
   ollama: {
     endpoint: string
@@ -83,4 +101,9 @@ export default defineEventHandler((event) => {
       endpoint: (data.ollama?.endpoint || 'http://127.0.0.1:11434').replace(/\/$/, ''),
     }
   }
+
+  const skillConfigsValue = headers['x-skill-configs']
+  event.context.skillConfigs = skillConfigsValue 
+    ? tryParseJson(decodeURIComponent(skillConfigsValue), {}) as SkillConfigs
+    : {}
 })

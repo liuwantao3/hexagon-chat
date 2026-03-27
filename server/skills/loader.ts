@@ -1,11 +1,38 @@
 import fs from 'fs'
 import path from 'path'
-import { parseSkillMetadata, parseSkillInstructions, type Skill, type SkillConfig } from './types'
+import { parseSkillMetadata, parseSkillInstructions, type Skill, type SkillConfigSchema, type SkillConfig } from './types'
 import { tool } from '@langchain/core/tools'
 import type { DynamicStructuredTool } from '@langchain/core/tools'
 import { z } from 'zod'
 
 const SKILLS_DIR = path.join(process.cwd(), 'skills')
+
+const globalSkillConfigs: Map<string, Record<string, string | boolean>> = new Map()
+
+export function setSkillConfigs(configs: Record<string, Record<string, string | boolean>>): void {
+  globalSkillConfigs.clear()
+  for (const [skillName, config] of Object.entries(configs)) {
+    globalSkillConfigs.set(skillName, config)
+  }
+}
+
+export function getSkillConfig(skillName: string): Record<string, string | boolean> | undefined {
+  return globalSkillConfigs.get(skillName)
+}
+
+function loadConfigSchema(skillPath: string): SkillConfigSchema | undefined {
+  const configFile = path.join(skillPath, 'config.json')
+  if (!fs.existsSync(configFile)) {
+    return undefined
+  }
+  try {
+    const content = fs.readFileSync(configFile, 'utf-8')
+    return JSON.parse(content) as SkillConfigSchema
+  } catch (error) {
+    console.error(`[SkillLoader] Failed to parse config.json for ${skillPath}:`, error)
+    return undefined
+  }
+}
 
 export class SkillLoader {
   private skills: Map<string, Skill> = new Map()
@@ -58,6 +85,7 @@ export class SkillLoader {
     }
 
     const tools = await this.loadTools(skillPath)
+    const configSchema = loadConfigSchema(skillPath)
 
     return {
       name: metadata.name,
@@ -66,7 +94,8 @@ export class SkillLoader {
       instructions: parseSkillInstructions(content),
       tools,
       icon: metadata.icon,
-      examples: metadata.examples
+      examples: metadata.examples,
+      configSchema
     }
   }
 
@@ -92,10 +121,17 @@ export class SkillLoader {
     try {
       const toolsModule = await import(toolsFile)
       const plainTools = toolsModule.default || toolsModule.tools || []
+      const skillName = path.basename(skillPath)
 
       return plainTools.map((t: any) => {
         if (t.name && t.description && t.execute) {
-          return tool(t.execute, {
+          const originalExecute = t.execute
+          const wrappedExecute = async function(input: any, runtimeConfig?: any) {
+            const skillConfig = globalSkillConfigs.get(skillName)
+            console.log(`[SkillTool] ${skillName} executing, config:`, skillConfig)
+            return originalExecute(input, skillConfig)
+          }
+          return tool(wrappedExecute, {
             name: t.name,
             description: t.description,
             schema: t.schema || z.object({}),
@@ -145,6 +181,21 @@ export class SkillLoader {
     }
 
     return skills.map(skill => skill.instructions).join('\n\n')
+  }
+
+  getConfigSchema(skillName: string): SkillConfigSchema | undefined {
+    const skill = this.skills.get(skillName)
+    return skill?.configSchema
+  }
+
+  getAllConfigSchemas(): Map<string, SkillConfigSchema> {
+    const schemas = new Map<string, SkillConfigSchema>()
+    for (const [name, skill] of this.skills) {
+      if (skill.configSchema) {
+        schemas.set(name, skill.configSchema)
+      }
+    }
+    return schemas
   }
 }
 

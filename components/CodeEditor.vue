@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue'
 import hljs from 'highlight.js'
 
 const props = defineProps<{

@@ -1,5 +1,4 @@
 import { LazyUModal, LazyUCard, LazyUButton } from '#components'
-import type { PropType, VNode, Component } from 'vue'
 
 interface Options {
   title?: string

@@ -25,7 +25,7 @@ import { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { transformImageContent } from '@/server/utils/transformImageContent'
 import type { ContextKeys } from '~/server/middleware/keys'
 import type { H3Event } from 'h3'
-import { skillLoader } from '@/server/skills'
+import { skillLoader, setSkillConfigs } from '@/server/skills'
 
 function isUsageLimitError(error: any): boolean {
     const errorStr = String(error?.message || error || '')
@@ -275,6 +275,10 @@ export default defineEventHandler(async (event) => {
                 await skillLoader.loadAll(true)
                 skillTools = skills?.length ? skillLoader.getAllTools(skills) : []
                 skillSystemPrompt = skills?.length ? skillLoader.getSystemPrompt(skills) : ''
+                
+                if (skills?.length && event.context.skillConfigs) {
+                    setSkillConfigs(event.context.skillConfigs)
+                }
             }
 
             // Only load MCP tools if codeAgentEnabled
@@ -386,7 +390,7 @@ Available tools: ${toolDescriptions}`
                         const response = await Promise.race([
                             llm.stream(transformedMessages),
                             new Promise((_, reject) => 
-                                setTimeout(() => reject(new Error('Stream timeout after 60 seconds')), 60000)
+                                setTimeout(() => reject(new Error('Stream timeout after 180 seconds')), 180000)
                             )
                         ])
 

@@ -1,4 +1,4 @@
-import { Content, GenerativeContentBlob, Part } from "@google/generative-ai"
+import type { Content, GenerativeContentBlob, Part } from "@google/generative-ai"
 
 export interface StreamingLog {
     date: Date

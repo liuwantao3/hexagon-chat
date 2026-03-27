@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import { compile, defineComponent, onUnmounted, watch, nextTick } from 'vue$'
-import { computed } from 'vue'
-
 const props = defineProps<{
   code: string
 }>()

@@ -1,23 +1,23 @@
 import {
   GenerativeModel,
   GoogleGenerativeAI as GenerativeAI,
-  FunctionDeclarationsTool as GoogleGenerativeAIFunctionDeclarationsTool,
-  FunctionDeclaration as GenerativeAIFunctionDeclaration,
+  type FunctionDeclarationsTool as GoogleGenerativeAIFunctionDeclarationsTool,
+  type FunctionDeclaration as GenerativeAIFunctionDeclaration,
   type FunctionDeclarationSchema as GenerativeAIFunctionDeclarationSchema,
-  GenerateContentRequest,
-  SafetySetting,
-  Part as GenerativeAIPart,
-  ModelParams,
-  RequestOptions,
+  type GenerateContentRequest,
+  type SafetySetting,
+  type Part as GenerativeAIPart,
+  type ModelParams,
+  type RequestOptions,
   type CachedContent,
 } from "@google/generative-ai"
-import { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager"
+import type { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager"
 import {
   AIMessageChunk,
   BaseMessage,
-  UsageMetadata,
+  type UsageMetadata,
 } from "@langchain/core/messages"
-import { ChatGenerationChunk, ChatResult } from "@langchain/core/outputs"
+import { ChatGenerationChunk, type ChatResult } from "@langchain/core/outputs"
 import { getEnvironmentVariable } from "@langchain/core/utils/env"
 import {
   BaseChatModel,
@@ -25,10 +25,10 @@ import {
   type LangSmithParams,
   type BaseChatModelParams,
 } from "@langchain/core/language_models/chat_models"
-import { NewTokenIndices } from "@langchain/core/callbacks/base"
+import type { NewTokenIndices } from "@langchain/core/callbacks/base"
 import {
-  BaseLanguageModelInput,
-  StructuredOutputMethodOptions,
+  type BaseLanguageModelInput,
+  type StructuredOutputMethodOptions,
 } from "@langchain/core/language_models/base"
 import {
   Runnable,

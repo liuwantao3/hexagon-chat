@@ -1,21 +1,21 @@
 import {
-  EnhancedGenerateContentResponse,
-  Content,
-  Part,
+  type EnhancedGenerateContentResponse,
+  type Content,
+  type Part,
 } from "@google/generative-ai"
 import {
   AIMessage,
   AIMessageChunk,
   BaseMessage,
   ChatMessage,
-  MessageContent,
-  MessageContentComplex,
+  type MessageContent,
+  type MessageContentComplex,
   isBaseMessage,
 } from "@langchain/core/messages"
 import {
   ChatGeneration,
   ChatGenerationChunk,
-  ChatResult,
+  type ChatResult,
 } from "@langchain/core/outputs"
 
 export function getMessageAuthor(message: BaseMessage) {

@@ -1,4 +1,4 @@
-import { MultiPartData, type H3Event } from 'h3'
+import { type MultiPartData, type H3Event } from 'h3'
 import type { KnowledgeBaseFormData, PageParser } from '@/server/types'
 
 export const parseKnowledgeBaseFormRequest = async (event: H3Event): Promise<KnowledgeBaseFormData> => {

@@ -85,6 +85,23 @@ const toolResultContent = computed(() => {
   }
 })
 
+const toolResultMarkdown = computed(() => {
+  if (!isToolResult.value) return ''
+  const content = props.message.content
+  try {
+    const parsed = typeof content === 'string' ? JSON.parse(content) : content
+    if (parsed?.markdown) {
+      return parsed.markdown
+    }
+    if (parsed?.error) {
+      return `**Error**: ${parsed.error}`
+    }
+    return typeof content === 'string' ? content : JSON.stringify(content, null, 2)
+  } catch {
+    return typeof content === 'string' ? content : JSON.stringify(content, null, 2)
+  }
+})
+
 const isSvgToolResult = computed(() => {
   return toolResultContent.value?.svg
 })
@@ -188,7 +205,7 @@ const pptTotalSlides = computed(() => {
               {{ imageError }}
             </div>
             <!-- Normal Tool Result -->
-            <div v-else v-html="markdown.render(renderContent || '')" class="md-body text-xs font-mono"></div>
+            <div v-else v-html="markdown.render(toolResultMarkdown)" class="md-body text-xs font-mono"></div>
           </div>
           <!-- Normal Message Display -->
           <div v-else class="p-3 overflow-hidden">

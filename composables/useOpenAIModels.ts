@@ -1,4 +1,3 @@
-import { ref } from 'vue'
 import { updateOpenAIModels } from '~/config/models'
 
 const isLoadingModels = ref(false)

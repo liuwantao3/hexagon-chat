@@ -20,4 +20,12 @@ declare module '@nuxt/schema' {
   }
 }
 
+declare global {
+  interface Window {
+    CodeExecutionHandler?: {
+      execute: (code: string, language: string) => Promise<{ output: string; error?: string }>
+    }
+  }
+}
+
 export { }

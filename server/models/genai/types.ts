@@ -1,9 +1,9 @@
 import {
-  CodeExecutionTool,
-  FunctionDeclarationsTool as GoogleGenerativeAIFunctionDeclarationsTool,
-  GoogleSearchRetrievalTool,
+  type CodeExecutionTool,
+  type FunctionDeclarationsTool as GoogleGenerativeAIFunctionDeclarationsTool,
+  type GoogleSearchRetrievalTool,
 } from "@google/generative-ai"
-import { BindToolsInput } from "@langchain/core/language_models/chat_models"
+import type { BindToolsInput } from "@langchain/core/language_models/chat_models"
 
 export type GoogleGenerativeAIToolType =
   | BindToolsInput

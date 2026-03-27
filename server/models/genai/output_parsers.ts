@@ -3,9 +3,9 @@ import {
   BaseLLMOutputParser,
   OutputParserException,
 } from "@langchain/core/output_parsers"
-import { JsonOutputKeyToolsParserParams } from "@langchain/core/output_parsers/openai_tools"
-import { ChatGeneration } from "@langchain/core/outputs"
-import { ToolCall } from "@langchain/core/messages/tool"
+import type { JsonOutputKeyToolsParserParams } from "@langchain/core/output_parsers/openai_tools"
+import type { ChatGeneration } from "@langchain/core/outputs"
+import type { ToolCall } from "@langchain/core/messages/tool"
 
 interface GoogleGenerativeAIToolsOutputParserParams<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

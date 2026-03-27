@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
 import type { ModelItem } from '@/server/api/models/index.get'
 
 const { t } = useI18n()

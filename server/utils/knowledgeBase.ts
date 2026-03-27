@@ -1,5 +1,5 @@
 import { type H3Event } from 'h3'
-import { KnowledgeBase } from '@prisma/client'
+import type { KnowledgeBase } from '@prisma/client'
 
 export const requireKnowledgeBase = async (knowledgeBaseId: string | undefined): Promise<KnowledgeBase> => {
   if (knowledgeBaseId == null) {

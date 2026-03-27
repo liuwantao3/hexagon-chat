@@ -1,4 +1,4 @@
-import { MultiPartData } from 'h3'
+import type { MultiPartData } from 'h3'
 
 export type PageParser = 'default' | 'jinaReader'
 

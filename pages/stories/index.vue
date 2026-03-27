@@ -751,8 +751,7 @@ watch(() => chatModels.value, (newModels) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-    <div class="max-w-7xl mx-auto">
+  <div class="max-w-6xl mx-auto">
       <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-8">
         {{ t('menu.stories') }}
       </h1>
@@ -1211,7 +1210,6 @@ watch(() => chatModels.value, (newModels) => {
               <UButton size="xs" variant="outline" color="error" @click="deleteStory(story.id)">
                 {{ t('stories.deleteBtn') }}
               </UButton>
-            </div>
           </div>
         </div>
       </div>

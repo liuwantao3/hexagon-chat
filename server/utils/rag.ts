@@ -5,7 +5,7 @@ import { JSONLoader } from "@langchain/classic/document_loaders/fs/json"
 import { DocxLoader } from "@langchain/community/document_loaders/fs/docx"
 import { CSVLoader } from "@langchain/community/document_loaders/fs/csv"
 import { compile } from "html-to-text"
-import { MultiPartData, H3Event } from 'h3'
+import { type MultiPartData, type H3Event } from 'h3'
 import { createRetriever } from '@/server/retriever'
 import type { PageParser } from '@/server/types'
 import { RecursiveUrlLoader, type RecursiveUrlLoaderOptions } from '@/server/utils/recursiveUrlLoader'

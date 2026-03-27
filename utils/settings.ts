@@ -1,6 +1,7 @@
 import { useStorage } from '@vueuse/core'
 import type { KnowledgeBase } from '@prisma/client'
 import type { ContextKeys } from '~/server/middleware/keys'
+import { getSkillConfigsHeader } from '~/composables/useSkillConfigs'
 
 // todo: only for compatibility with old localStorage values, will be removed in the future
 function getLocalValue(key: string) {
@@ -57,7 +58,11 @@ export const DEFAULT_KEYS_STORE: ContextKeys = {
 
 export const keysStore = useStorage<ContextKeys>('keys', DEFAULT_KEYS_STORE)
 
-export const getKeysHeader = () => ({ 'x-chat-ollama-keys': encodeURIComponent(JSON.stringify(keysStore.value)) })
+export const getKeysHeader = () => {
+  const keysHeader = { 'x-chat-ollama-keys': encodeURIComponent(JSON.stringify(keysStore.value)) }
+  const skillConfigsHeader = getSkillConfigsHeader()
+  return { ...keysHeader, ...skillConfigsHeader }
+}
 
 export const loadOllamaInstructions = async () => {
   try {

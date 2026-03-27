@@ -550,7 +550,7 @@ function getTagColor(tag: string): string {
 
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-    <div class="max-w-7xl mx-auto">
+    <div class="max-w-6xl mx-auto">
       <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
         English Learning Materials Generator
       </h1>

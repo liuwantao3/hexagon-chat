@@ -62,7 +62,6 @@ export default defineNuxtConfig({
   },
 
   ui: {
-    icons: ['heroicons', 'iconoir', 'material-symbols', 'mdi', 'svg-spinners']
   },
 
   css: [

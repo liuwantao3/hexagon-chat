@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { ModelInfo } from '~/composables/useModels'
-import { onMounted } from 'vue'
 
 withDefaults(defineProps<{
   autoDefault?: boolean,

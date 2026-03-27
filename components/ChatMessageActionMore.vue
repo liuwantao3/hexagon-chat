@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import { useClipboard } from '@vueuse/core'
-import type { Message } from '~/components/Chat.vue'
+import type { ChatMessage } from '~/types/chat'
 
 const props = defineProps<{
-  message: Message
+  message: ChatMessage
   disabled?: boolean
 }>()
 

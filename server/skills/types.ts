@@ -1,5 +1,19 @@
 import type { DynamicStructuredTool } from '@langchain/core/tools'
 
+export interface SkillConfigField {
+  key: string
+  type: 'password' | 'text' | 'select' | 'toggle'
+  label: string
+  required?: boolean
+  placeholder?: string
+  options?: string[]
+  default?: string | boolean
+}
+
+export interface SkillConfigSchema {
+  fields: SkillConfigField[]
+}
+
 export interface SkillConfig {
   name: string
   description: string
@@ -8,6 +22,7 @@ export interface SkillConfig {
   tools?: DynamicStructuredTool[]
   systemPrompt?: string
   examples?: string[]
+  configSchema?: SkillConfigSchema
 }
 
 export interface Skill {
@@ -18,6 +33,7 @@ export interface Skill {
   tools: DynamicStructuredTool[]
   icon?: string
   examples?: string[]
+  configSchema?: SkillConfigSchema
 }
 
 export interface SkillMetadata {

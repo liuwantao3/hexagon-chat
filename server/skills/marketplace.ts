@@ -1,14 +1,17 @@
 export interface MarketplaceSkill {
   name: string
   description: string
-  author: string
+  author?: string
   source: 'github' | 'lobehub' | 'local'
   url?: string
   category?: 'anthropic' | 'langchain' | 'mcp' | 'custom'
   stars?: number
   installed?: boolean
   hasTools?: boolean
+  hasConfig?: boolean
   language?: 'python' | 'typescript' | 'javascript' | 'any'
+  icon?: string
+  examples?: string[]
 }
 
 export interface MarketplaceConfig {

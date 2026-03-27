@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
-
 const codeOutput = ref<{ [key: string]: string }>({})
 
 const handleCodeExecution = (code: string, language: string, cellId: string) => {

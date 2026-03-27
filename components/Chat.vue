@@ -5,6 +5,7 @@ import { loadOllamaInstructions, loadKnowledgeBases } from '@/utils/settings'
 import { type ChatBoxFormData } from '@/components/ChatInputBox.vue'
 import { type ChatSessionSettings } from '~/pages/chat/index.vue'
 import { ChatSettings, SkillMarketplace } from '#components'
+import SkillConfigModal from './SkillConfigModal.vue'
 import type { ChatMessage } from '~/types/chat'
 import { chatDefaultSettings } from '~/composables/store'
 import PptPreview from '~/components/PptPreview.vue'
@@ -157,12 +158,23 @@ const extractCodeBlocks = (content: string) => {
 }
 
 // Available skills
-const availableSkills = ref<Array<{ name: string, description: string, icon: string }>>([])
+const availableSkills = ref<Array<{ name: string, description: string, icon: string, hasConfig: boolean }>>([])
 
 const fetchSkills = async () => {
   try {
-    const res = await $fetch('/api/skills')
-    availableSkills.value = res.skills
+    const res = await $fetch<{ skills: Array<{ name: string, description: string, icon: string, hasConfig: boolean }> }>('/api/skills')
+    const skills = res.skills || []
+    
+    for (const skill of skills) {
+      try {
+        await $fetch(`/api/skills/config/${skill.name}`)
+        skill.hasConfig = true
+      } catch {
+        skill.hasConfig = false
+      }
+    }
+    
+    availableSkills.value = skills
   } catch (e) {
     console.error('Failed to fetch skills:', e)
   }
@@ -170,6 +182,8 @@ const fetchSkills = async () => {
 
 // Marketplace modal
 const showMarketplace = ref(false)
+const configureSkillName = ref<string | null>(null)
+const configureSkillTitle = ref('')
 
 // PPT Preview modal
 const showPptPreview = ref(false)
@@ -185,6 +199,30 @@ const closeMarketplace = () => {
 
 const onSkillInstalled = (skillName: string) => {
   fetchSkills()
+}
+
+const onConfigureSkill = (skillName: string, title: string) => {
+  configureSkillName.value = skillName
+  configureSkillTitle.value = title
+}
+
+const onConfigureSkillFromDropdown = async (skillName: string, title: string) => {
+  console.log('Configuring skill:', skillName, 'title:', title)
+  try {
+    await $fetch(`/api/skills/config/${skillName}`)
+    configureSkillName.value = skillName
+    configureSkillTitle.value = title
+    console.log('configureSkillName set to:', configureSkillName.value)
+    console.log('Modal should open now')
+  } catch (e) {
+    console.log('Config fetch failed:', e)
+    // Skill doesn't have config, ignore
+  }
+}
+
+const closeConfigureSkill = () => {
+  configureSkillName.value = null
+  configureSkillTitle.value = ''
 }
 
 const openPptPreview = (previews: any[], totalSlides: number) => {
@@ -355,12 +393,15 @@ onReceivedMessage(data => {
       break
     case 'complete':
       sendingCount.value -= 1
-      const lastMessage = messages.value[messages.value.length - 1]
-      if (lastMessage && lastMessage.content) {
-        const { htmlCode, cssCode, jsCode } = extractCodeBlocks(lastMessage.content)
-        console.log('Sandbox code blocks found:', { htmlCode: !!htmlCode, cssCode: !!cssCode, jsCode: !!jsCode })
-        if (htmlCode || cssCode || jsCode) {
-          sandbox.updateFromCodeBlocks(htmlCode, cssCode, jsCode)
+      // Only process sandbox if sandbox is enabled in settings AND sandbox skill is selected
+      if (sandbox?.isEnabled?.value && isSandboxSkillEnabled.value) {
+        const lastMessage = messages.value[messages.value.length - 1]
+        if (lastMessage && lastMessage.content) {
+          const { htmlCode, cssCode, jsCode } = extractCodeBlocks(lastMessage.content)
+          console.log('Sandbox code blocks found:', { htmlCode: !!htmlCode, cssCode: !!cssCode, jsCode: !!jsCode })
+          if (htmlCode || cssCode || jsCode) {
+            sandbox.updateFromCodeBlocks(htmlCode, cssCode, jsCode)
+          }
         }
       }
       break
@@ -556,16 +597,23 @@ async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
                     </UButton>
                   </div>
                   <div class="space-y-2 max-h-64 overflow-y-auto">
-                    <label v-for="skill in availableSkills" :key="skill.name" class="flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded">
+                    <div v-for="skill in availableSkills" :key="skill.name" class="flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded">
                       <UCheckbox
                         :model-value="selectedSkills.includes(skill.name)"
                         @update:model-value="(val) => { if (val) selectedSkills.push(skill.name); else selectedSkills = selectedSkills.filter(s => s !== skill.name) }"
                       />
-                      <div class="flex-1">
+                      <div class="flex-1 cursor-pointer" @click="selectedSkills.includes(skill.name) ? null : selectedSkills.push(skill.name)">
                         <span class="text-sm">{{ skill.icon }} {{ skill.name }}</span>
                         <p class="text-xs text-gray-500">{{ skill.description }}</p>
                       </div>
-                    </label>
+                      <UButton
+                        v-if="skill.hasConfig"
+                        size="xs"
+                        variant="ghost"
+                        icon="i-heroicons-cog-6-tooth"
+                        @click.stop="onConfigureSkillFromDropdown(skill.name, skill.name)"
+                      />
+                    </div>
                     <p v-if="availableSkills.length === 0" class="text-sm text-gray-500 text-center py-4">
                       No skills installed. Click "Browse" to install.
                     </p>
@@ -590,8 +638,18 @@ async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
         v-if="showMarketplace"
         @close="closeMarketplace"
         @install="onSkillInstalled"
+        @configure="onConfigureSkill"
       />
     </ClientOnly>
+
+    <!-- Skill Config Modal -->
+    <div v-if="configureSkillName" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="closeConfigureSkill">
+      <SkillConfigModal
+        :skill-name="configureSkillName"
+        :skill-title="configureSkillTitle"
+        @close="closeConfigureSkill"
+      />
+    </div>
 
     <!-- PPT Preview Modal -->
     <ClientOnly>

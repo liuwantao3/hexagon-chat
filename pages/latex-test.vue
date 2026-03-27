@@ -33,7 +33,6 @@
 
 <script setup lang="ts">
 import { useKatexClient } from '~/composables/useKatexClient'
-import { computed } from 'vue'
 
 const markdown = useMarkdown()
 

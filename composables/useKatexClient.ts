@@ -1,5 +1,3 @@
-import { onMounted } from 'vue'
-
 export function useKatexClient() {
     onMounted(() => {
         // Only run in client-side

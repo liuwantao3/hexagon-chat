@@ -1,4 +1,4 @@
-import { ChromaClient, ChromaClientParams, DeleteCollectionParams } from 'chromadb'
+import { ChromaClient, type ChromaClientParams, type DeleteCollectionParams } from 'chromadb'
 import { type KnowledgeBase } from "@prisma/client"
 import prisma from "@/server/utils/prisma"
 import { RedisDocstore } from '~/server/docstore/redis'

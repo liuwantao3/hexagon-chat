@@ -1,5 +1,3 @@
-import { ref, type Ref } from 'vue'
-
 export interface Tool {
   type: 'function'
   name: string

@@ -6,11 +6,16 @@ const props = defineProps<{
   onInstall: (skillName: string) => void
 }>()
 
+const emit = defineEmits<{
+  configure: [skillName: string, title: string]
+}>()
+
 const searchQuery = ref('')
 const searchResults = ref<MarketplaceSkill[]>([])
 const isSearching = ref(false)
 const error = ref('')
 const installedSkills = ref<string[]>([])
+const skillConfigSchemas = ref<Record<string, boolean>>({})
 
 const categoryColors: Record<string, string> = {
   langchain: 'blue',
@@ -80,8 +85,24 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
+  
+  try {
+    const { skills: localSkills } = await $fetch<{ skills: { name: string }[] }>('/api/skills')
+    installedSkills.value = localSkills.map(s => s.name)
+    
+    for (const skill of localSkills) {
+      try {
+        await $fetch(`/api/skills/config/${skill.name}`)
+        skillConfigSchemas.value[skill.name] = true
+      } catch {
+        skillConfigSchemas.value[skill.name] = false
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load installed skills', e)
+  }
 })
 
 onUnmounted(() => {
@@ -218,6 +239,15 @@ onUnmounted(() => {
                 <UBadge color="green" size="sm">
                   Installed
                 </UBadge>
+                <UButton
+                  v-if="skillConfigSchemas[skill.name]"
+                  size="xs"
+                  variant="outline"
+                  icon="i-heroicons-cog-6-tooth"
+                  @click="emit('configure', skill.name, skill.name)"
+                >
+                  Configure
+                </UButton>
                 <UButton
                   size="xs"
                   variant="ghost"

@@ -1,4 +1,4 @@
-import { DocumentInterface } from "@langchain/core/documents"
+import type { DocumentInterface } from "@langchain/core/documents"
 import { BaseDocumentCompressor } from "@langchain/core/retrievers/document_compressors"
 import { getEnvironmentVariable } from "@langchain/core/utils/env"
 import { CohereClient } from "cohere-ai"

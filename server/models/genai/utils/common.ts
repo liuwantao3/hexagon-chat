@@ -1,36 +1,36 @@
 import {
-  EnhancedGenerateContentResponse,
-  Content,
-  Part,
+  type EnhancedGenerateContentResponse,
+  type Content,
+  type Part,
   type FunctionDeclarationsTool as GoogleGenerativeAIFunctionDeclarationsTool,
   type FunctionDeclaration as GenerativeAIFunctionDeclaration,
   POSSIBLE_ROLES,
-  FunctionResponsePart,
-  FunctionCallPart,
+  type FunctionResponsePart,
+  type FunctionCallPart,
 } from "@google/generative-ai"
 import {
   AIMessage,
   AIMessageChunk,
   BaseMessage,
   ChatMessage,
-  MessageContent,
-  MessageContentComplex,
-  UsageMetadata,
+  type MessageContent,
+  type MessageContentComplex,
+  type UsageMetadata,
   isBaseMessage,
 } from "@langchain/core/messages"
 import {
   ChatGeneration,
   ChatGenerationChunk,
-  ChatResult,
+  type ChatResult,
 } from "@langchain/core/outputs"
 import { isLangChainTool } from "@langchain/core/utils/function_calling"
 import { isOpenAITool } from "@langchain/core/language_models/base"
-import { ToolCallChunk } from "@langchain/core/messages/tool"
+import type { ToolCallChunk } from "@langchain/core/messages/tool"
 import {
   jsonSchemaToGeminiParameters,
   zodToGenerativeAIParameters,
 } from "./zod_to_genai_parameters.js"
-import { GoogleGenerativeAIToolType } from "../types.js"
+import type { GoogleGenerativeAIToolType } from "../types.js"
 
 export function getMessageAuthor(message: BaseMessage) {
   const type = message._getType()

@@ -1,0 +1,18 @@
+{
+  "fields": [
+    {
+      "key": "apiKey",
+      "type": "password",
+      "label": "API Key",
+      "required": true,
+      "placeholder": "Enter your Tavily API key"
+    },
+    {
+      "key": "engine",
+      "type": "select",
+      "label": "Search Engine",
+      "options": ["tavily", "serpapi"],
+      "default": "tavily"
+    }
+  ]
+}
