@@ -9,8 +9,13 @@ const SKILLS_DIR = path.join(process.cwd(), 'skills')
 
 export class SkillLoader {
   private skills: Map<string, Skill> = new Map()
+  private loaded = false
 
-  async loadAll(): Promise<Skill[]> {
+  async loadAll(force = false): Promise<Skill[]> {
+    if (this.loaded && !force) {
+      return Array.from(this.skills.values())
+    }
+
     this.skills.clear()
 
     if (!fs.existsSync(SKILLS_DIR)) {
@@ -32,6 +37,7 @@ export class SkillLoader {
       }
     }
 
+    this.loaded = true
     return Array.from(this.skills.values())
   }
 
@@ -122,9 +128,11 @@ export class SkillLoader {
   }
 
   getAllTools(skillNames?: string[]): DynamicStructuredTool[] {
-    const skills = skillNames
-      ? this.getEnabledSkills(skillNames)
-      : this.getAllSkills()
+    if (!skillNames || skillNames.length === 0) {
+      return []
+    }
+
+    const skills = this.getEnabledSkills(skillNames)
 
     return skills.flatMap(skill => skill.tools)
   }

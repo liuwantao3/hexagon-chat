@@ -267,17 +267,23 @@ export default defineEventHandler(async (event) => {
             let llm = createChatModelWithFallback(model, family, event)
 
             const mcpService = new McpService()
-            const normalizedTools = await mcpService.listTools()
 
-            // Load skill tools and system prompts
-            await skillLoader.loadAll()
-            const skillTools = skills?.length ? skillLoader.getAllTools(skills) : []
-            const skillSystemPrompt = skills?.length ? skillLoader.getSystemPrompt(skills) : ''
+            // Load skill tools and system prompts only if needed
+            let skillTools: any[] = []
+            let skillSystemPrompt = ''
+            if (codeAgentEnabled || skills?.length) {
+                await skillLoader.loadAll(true)
+                skillTools = skills?.length ? skillLoader.getAllTools(skills) : []
+                skillSystemPrompt = skills?.length ? skillLoader.getSystemPrompt(skills) : ''
+            }
 
-            // Combine MCP tools with code execution tools (only if enabled)
-            const toolsToUse = codeAgentEnabled
-                ? [...codeExecutionTools, ...svgTools, ...imageTools, ...normalizedTools, ...skillTools]
-                : [...normalizedTools, ...skillTools]
+            // Only load MCP tools if codeAgentEnabled
+            const normalizedTools = codeAgentEnabled ? await mcpService.listTools() : []
+
+            // Combine tools only if codeAgentEnabled or skills are selected
+            const toolsToUse = (codeAgentEnabled || skills?.length)
+                ? [...(codeAgentEnabled ? codeExecutionTools : []), ...(codeAgentEnabled ? svgTools : []), ...(codeAgentEnabled ? imageTools : []), ...normalizedTools, ...skillTools]
+                : []
             const toolsMap = toolsToUse.reduce((acc, t) => {
                 acc[t.name] = t
                 return acc
@@ -326,6 +332,8 @@ Available tools: ${toolDescriptions}`
 
             console.log('[CodeAgent] Final messages count:', finalMessages.length)
             console.log('[Skills] Loaded skills:', skills, 'with', skillTools.length, 'tools')
+            console.log('[CodeAgent] toolsToUse:', toolsToUse.map(t => t.name))
+            console.log('[CodeAgent] bindTools check - toolsToUse.length:', toolsToUse.length, 'codeAgentEnabled:', codeAgentEnabled, 'skills?.length:', skills?.length)
 
             if (family === MODEL_FAMILIES.anthropic && toolsToUse?.length) {
                 if (llm?.bindTools) {
@@ -334,7 +342,7 @@ Available tools: ${toolDescriptions}`
                 }
             } else if (llm instanceof ChatOllama) {
                 // Ollama with tools - handled separately if needed
-            } else if (normalizedTools?.length || (codeAgentEnabled && codeExecutionTools.length) || skillTools.length) {
+            } else if (toolsToUse.length > 0 && (codeAgentEnabled || skills?.length)) {
                 // For other models that support function calling
                 if (llm?.bindTools) {
                     llm = llm.bindTools(toolsToUse) as BaseChatModel
@@ -373,7 +381,7 @@ Available tools: ${toolDescriptions}`
                             return [message.role, content]
                         })
 
-                        console.log('[Chat] Starting stream for model:', family, 'with', skillTools.length, 'tools')
+                        console.log('[Chat] Starting stream for model:', family, 'with', toolsToUse.length, 'tools (toUse)')
 
                         const response = await Promise.race([
                             llm.stream(transformedMessages),
