@@ -8,6 +8,7 @@ import { ChatSettings, SkillMarketplace } from '#components'
 import type { ChatMessage } from '~/types/chat'
 import { chatDefaultSettings } from '~/composables/store'
 import PptPreview from '~/components/PptPreview.vue'
+import { useSandbox } from '~/composables/useSandbox'
 
 type Instruction = Awaited<ReturnType<typeof loadOllamaInstructions>>[number]
 
@@ -87,6 +88,67 @@ const selectedSkills = computed({
   get: () => chatDefaultSettings.value.skills || [],
   set: (val) => { chatDefaultSettings.value.skills = val },
 })
+
+// Sandbox
+const sandbox = useSandbox()
+
+// Sandbox - handle tool results and message content
+const handleSandboxCode = (content: string, isToolResult?: boolean) => {
+  if (!sandbox?.isEnabled?.value) return false
+  if (!content || typeof content !== 'string') {
+    return false
+  }
+  
+  // Only process tool results
+  if (!isToolResult) {
+    return false
+  }
+  
+  // Skip if content doesn't look like code (e.g., think sections)
+  if (!content.includes('{') && !content.includes('html') && !content.includes('<')) {
+    return false
+  }
+  
+  console.log('Processing tool result for sandbox:', content.substring(0, 100))
+  
+  // Try to parse as JSON first
+  try {
+    const data = JSON.parse(content)
+    console.log('Tool result parsed, keys:', Object.keys(data))
+    
+    if (data.html || data.code || data.js || data.js_code || data.css) {
+      console.log('Found code in tool result JSON!')
+      sandbox.updateFromCodeBlocks(
+        data.html || '',
+        data.css || '',
+        data.code || data.js_code || data.js || ''
+      )
+      return true
+    }
+  } catch (e) {
+    console.log('Tool result is not JSON')
+  }
+  
+  return false
+}
+
+// Extract code blocks from message content
+const extractCodeBlocks = (content: string) => {
+  let htmlCode = ''
+  let cssCode = ''
+  let jsCode = ''
+
+  const htmlMatch = content.match(/```html\n([\s\S]*?)```/i)
+  if (htmlMatch) htmlCode = htmlMatch[1].trim()
+
+  const cssMatch = content.match(/```css\n([\s\S]*?)```/i)
+  if (cssMatch) cssCode = cssMatch[1].trim()
+
+  const jsMatch = content.match(/```(?:javascript|js)\n([\s\S]*?)```/i)
+  if (jsMatch) jsCode = jsMatch[1].trim()
+
+  return { htmlCode, cssCode, jsCode }
+}
 
 // Available skills
 const availableSkills = ref<Array<{ name: string, description: string, icon: string }>>([])
@@ -221,7 +283,6 @@ const onSend = async (data: ChatBoxFormData) => {
   })
 
   const userMessage = { role: "user", id, content: input, startTime: timestamp, endTime: timestamp, model: models.value.join(',') || '' } as const
-  console.log("userMessage is", userMessage)
   emits('message', userMessage)
   messages.value.push(userMessage)
 
@@ -271,12 +332,31 @@ onReceivedMessage(data => {
     case 'message':
       if (sendingCount.value === 0) sendingCount.value += 1
       updateMessage(data, { type: undefined, ...data.data })
+      
+      // Check if this is a tool result
+      const isToolResult = data.data?.toolResult === true
+      const toolCallId = data.data?.toolCallId
+      const msgContent = data.data?.content || data.data?.message?.content || ''
+      
+      console.log('Message data:', data.data, 'isToolResult:', isToolResult)
+      
+      if (msgContent) {
+        handleSandboxCode(msgContent, isToolResult, toolCallId)
+      }
       break
     case 'relevant_documents':
       updateMessage(data, { type: undefined, ...data.data })
       break
     case 'complete':
       sendingCount.value -= 1
+      const lastMessage = messages.value[messages.value.length - 1]
+      if (lastMessage && lastMessage.content) {
+        const { htmlCode, cssCode, jsCode } = extractCodeBlocks(lastMessage.content)
+        console.log('Sandbox code blocks found:', { htmlCode: !!htmlCode, cssCode: !!cssCode, jsCode: !!jsCode })
+        if (htmlCode || cssCode || jsCode) {
+          sandbox.updateFromCodeBlocks(htmlCode, cssCode, jsCode)
+        }
+      }
       break
     case 'abort':
       updateMessage(data, { type: 'canceled' })
@@ -348,14 +428,12 @@ async function onRemove(data: ChatMessage) {
 async function initData(sessionId?: number) {
 
   const { data } = useAuth()
-  console.log("User ID and User Name:", data.value?.id, data.value?.name) //Debug
   const userId = data.value?.id
 
   //if (typeof sessionId !== 'number' || !userId) return
   if (typeof sessionId !== 'number') return
 
   const result = await clientDB.chatSessions.get(sessionId)
-  console.log("Session Info:", result)
   sessionInfo.value = result
   knowledgeBaseInfo.value = knowledgeBases.find(el => el.id === result?.knowledgeBaseId)
   instructionInfo.value = instructions.find(el => el.id === result?.instructionId)
@@ -413,6 +491,13 @@ async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
         </div>
         <UTooltip v-if="sessionId" :text="t('chat.modifyTips')">
           <UButton icon="i-iconoir-edit-pencil" color="gray" @click="onOpenSettings" />
+        </UTooltip>
+        <UTooltip v-if="sandbox?.isEnabled?.value" :text="sandbox?.isOpen?.value ? 'Close Sandbox' : 'Open Sandbox'" :popper="{ placement: 'top-start' }">
+          <UButton 
+            :icon="sandbox?.isOpen?.value ? 'i-heroicons-x-mark' : 'i-heroicons-code-bracket'" 
+            :color="sandbox?.isOpen?.value ? 'primary' : 'gray'"
+            class="ml-2"
+            @click="sandbox?.togglePanel()" />
         </UTooltip>
       </div>
       <div ref="messageListEl" class="relative flex-1 overflow-x-hidden overflow-y-auto px-4">

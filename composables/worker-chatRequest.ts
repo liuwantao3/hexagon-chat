@@ -123,18 +123,21 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
       if (done) break
 
       const chunk = prevPart + new TextDecoder().decode(value)
-
-      if (!chunk.includes(splitter)) {
-        prevPart = chunk
-        continue
-      }
       prevPart = ''
 
       for (const line of chunk.split(splitter)) {
         if (!line) continue
 
-        //console.log(`%c${data.model}`, 'color:#818cf8', line)
-        const chatMessage = JSON.parse(line) as ResponseMessage | ResponseRelevantDocument
+        // Try to parse, if fails accumulate and try with next chunk
+        let chatMessage
+        try {
+          chatMessage = JSON.parse(line) as ResponseMessage | ResponseRelevantDocument
+        } catch (e) {
+          // Accumulate partial content for next iteration
+          prevPart += line + splitter
+          console.warn('Partial message accumulated, waiting for more data')
+          continue
+        }
         const isMessage = !('type' in chatMessage) && 'message' in chatMessage
         const isToolResult = isMessage && chatMessage.message.toolResult === true
 

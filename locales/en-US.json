@@ -10,7 +10,6 @@
     "stories": "Story Generator",
     "learning": "Learning Materials",
     "chat": "Chat",
-    "realtime": "Realtime Chat",
     "settings": "Settings"
   },
   "colorMode": {
@@ -168,8 +167,20 @@
     "modelNames": "Model Names",
     "modelNamesHint": "Enter model names separated by commas",
     "modelNamesPlaceholder": "e.g., abab6.5s-chat, abab6.5g-chat",
-    "realtimeChat": "Realtime Chat",
-    "realtimeChatEnabled": "Enable Realtime Chat"
+    "sandbox": {
+      "sandbox": "Sandbox",
+      "enable": "Enable Sandbox",
+      "autoScreenshot": "Auto Screenshot After Code",
+      "visionModel": "Vision Model",
+      "selectVisionModel": "Select a vision model",
+      "noVisionModels": "No vision-capable models configured",
+      "includeConsole": "Capture Console Logs",
+      "title": "Sandbox",
+      "reset": "Reset",
+      "close": "Close",
+      "clearConsole": "Clear",
+      "noLogs": "No console output"
+    }
   },
   "auth": {
     "signIn": "Sign In",

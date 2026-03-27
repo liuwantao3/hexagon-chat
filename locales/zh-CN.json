@@ -10,8 +10,7 @@
     "stories": "故事生成器",
     "learning": "学习材料",
     "chat": "对话",
-    "settings": "设置",
-    "realtime": "实时语音"
+    "settings": "设置"
   },
   "colorMode": {
     "system": "自动",
@@ -167,8 +166,20 @@
     "modelNames": "模型名称",
     "modelNamesHint": "输入模型名称，用逗号分隔",
     "modelNamesPlaceholder": "例如：abab6.5s-chat, abab6.5g-chat",
-    "realtimeChat": "实时对话",
-    "realtimeChatEnabled": "启用实时对话"
+    "sandbox": {
+      "sandbox": "沙盒",
+      "enable": "启用沙盒",
+      "autoScreenshot": "代码执行后自动截图",
+      "visionModel": "视觉模型",
+      "selectVisionModel": "选择视觉模型",
+      "noVisionModels": "未配置视觉模型",
+      "includeConsole": "捕获控制台日志",
+      "title": "沙盒",
+      "reset": "重置",
+      "close": "关闭",
+      "clearConsole": "清除",
+      "noLogs": "无控制台输出"
+    }
   },
   "auth": {
     "signIn": "登录",

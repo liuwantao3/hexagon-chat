@@ -8,7 +8,7 @@
       <SettingsServers />
     </div>
     <div class="mb-4">
-      <SettingsRealtimeChat />
+      <SettingsSandbox />
     </div>
     <div class="mb-4">
       <SettingsLanguageSelectMenu />

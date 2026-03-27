@@ -2,6 +2,7 @@
 import type { ComponentInstance } from 'vue'
 import ChatSessionList from '~/components/ChatSessionList.vue'
 import Chat from '~/components/Chat.vue'
+import SandboxPanel from '~/components/SandboxPanel.vue'
 import type { ChatMessage } from '@/types/chat'
 
 export interface ChatSessionSettings extends Partial<Omit<ChatSession, 'id' | 'createTime'>> { }
@@ -11,6 +12,7 @@ const chatSessionListRef = shallowRef<ComponentInstance<typeof ChatSessionList>>
 const chatRef = shallowRef<ComponentInstance<typeof Chat>>()
 const slideover = useSlideover()
 const { isMobile } = useMediaBreakpoints()
+const sandbox = useSandbox()
 
 const sessionId = ref(0)
 const latestMessageId = ref(0)
@@ -79,7 +81,11 @@ provide('isSessionListVisible', isSessionListVisible)
               ref="chatRef"
               v-if="sessionId > 0"
               class="chat"
-              :class="{ 'full-width': !isSessionListVisible, 'with-sidebar': isSessionListVisible }"
+              :class="{ 
+                  'full-width': !isSessionListVisible, 
+                  'with-sidebar': isSessionListVisible,
+                  'with-sandbox': sandbox.isEnabled.value && sandbox.isOpen.value 
+              }"
               :session-id="sessionId"
               @change-settings="onChangeSettings"
               @message="onMessage"
@@ -93,10 +99,18 @@ provide('isSessionListVisible', isSessionListVisible)
             </template>
         </Chat>
         <div v-else class="new-chat">
-            <UButton icon="i-material-symbols-add" color="primary" square @click="onNewChat">
-                {{ t('chat.newChat') }}
-            </UButton>
+            <div class="flex flex-col items-center gap-4">
+                <UButton icon="i-material-symbols-add" color="primary" square @click="onNewChat">
+                    {{ t('chat.newChat') }}
+                </UButton>
+                <UButton v-if="sandbox.isEnabled.value" icon="i-heroicons-code-bracket" variant="outline" @click="sandbox.openPanel()">
+                    Open Sandbox
+                </UButton>
+            </div>
         </div>
+        <ClientOnly>
+            <SandboxPanel v-if="sandbox.isEnabled.value && sandbox.isOpen.value" class="sandbox-panel" />
+        </ClientOnly>
     </div>
 </template>
 
@@ -110,6 +124,8 @@ provide('isSessionListVisible', isSessionListVisible)
     border: 1px solid var(--border-color);
     border-radius: 0.375rem;
     box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
 }
 
 .session-list {
@@ -136,6 +152,19 @@ provide('isSessionListVisible', isSessionListVisible)
 
 .chat.with-sidebar {
     width: calc(100% - var(--chat-side-width, 240px));
+}
+
+.chat.with-sandbox {
+    width: calc(100% - var(--sandbox-width, 600px));
+}
+
+.sandbox-panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--sandbox-width, 600px);
+    z-index: 10;
 }
 
 .menu-button {
