@@ -92,9 +92,15 @@ const selectedSkills = computed({
 // Sandbox
 const sandbox = useSandbox()
 
+// Check if sandbox skill is enabled
+const isSandboxSkillEnabled = computed(() => {
+  return selectedSkills.value.includes('sandbox')
+})
+
 // Sandbox - handle tool results and message content
 const handleSandboxCode = (content: string, isToolResult?: boolean) => {
-  if (!sandbox?.isEnabled?.value) return false
+  // Only process if sandbox is enabled in settings AND sandbox skill is selected
+  if (!sandbox?.isEnabled?.value || !isSandboxSkillEnabled.value) return false
   if (!content || typeof content !== 'string') {
     return false
   }
