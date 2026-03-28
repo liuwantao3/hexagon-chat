@@ -71,13 +71,13 @@ export const useSandbox = () => {
       }
     }
     
-    console.log('updateFromCodeBlocks:', { htmlLength: processedHtml.length, jsLength: processedJs.length })
+
     
     if (processedHtml) state.value.html = processedHtml
     if (cssCode) state.value.css = cssCode
     if (processedJs) state.value.js = processedJs
     
-    console.log('updateFromCodeBlocks: updated state, html length:', state.value.html.length)
+
     
     // Open panel
     isPanelOpen.value = true
@@ -93,32 +93,41 @@ export const useSandbox = () => {
   const reset = () => {
     state.value = { html: '', css: '', js: '' }
     consoleLogs.value = []
-    console.log('Sandbox reset, rendering empty content')
     requestAnimationFrame(() => {
       render()
     })
   }
 
-  const render = () => {
-    console.log('Sandbox render called, html length:', state.value.html.length)
+  let isRendering = false
+  let lastRenderedHtml = ''
+  const render = (retryCount = 0) => {
+    if (isRendering) {
+      return
+    }
+    if (lastRenderedHtml === state.value.html && iframeRef.value) {
+      return
+    }
+    
+    isRendering = true
     if (!iframeRef.value) {
-      console.log('Sandbox: no iframe ref')
-      // Try again after a short delay
-      setTimeout(() => {
-        if (iframeRef.value) {
-          console.log('Sandbox: retry render after delay')
-          renderContent()
-        }
-      }, 100)
+      const delays = [50, 100, 200, 500, 1000]
+      const delay = delays[Math.min(retryCount, delays.length - 1)]
+      
+      if (retryCount < 10) {
+        setTimeout(() => {
+          render(retryCount + 1)
+        }, delay)
+      }
+      isRendering = false
       return
     }
     renderContent()
+    lastRenderedHtml = state.value.html
+    isRendering = false
   }
 
   const renderContent = () => {
     if (!iframeRef.value) return
-    
-    console.log('Sandbox: actually rendering, html:', state.value.html.substring(0, 50))
 
     const content = `
 <!DOCTYPE html>
@@ -286,14 +295,10 @@ export const useSandbox = () => {
   }
 
   const setIframeRef = (el: HTMLIFrameElement | null) => {
-    console.log('setIframeRef called:', !!el)
     if (el) {
       iframeRef.value = el
       window.addEventListener('message', handleConsoleMessage)
       
-      console.log('Iframe ref set successfully')
-      
-      // Render when iframe is available and there's content
       if (state.value.html || state.value.css || state.value.js) {
         nextTick(render)
       }
@@ -318,12 +323,23 @@ export const useSandbox = () => {
     isPanelOpen.value = !isPanelOpen.value
   }
 
-  // Watch for state changes and render when there's content
-  watch(() => [state.value.html, state.value.css, state.value.js], () => {
-    if ((state.value.html || state.value.css || state.value.js) && iframeRef.value) {
-      nextTick(render)
+  // Debounce for watch
+  let watchRenderTimeout: NodeJS.Timeout | null = null
+  const triggerRender = () => {
+    if (watchRenderTimeout) clearTimeout(watchRenderTimeout)
+    watchRenderTimeout = setTimeout(() => {
+      if (iframeRef.value) {
+        render()
+      }
+    }, 50)
+  }
+
+  // Watch for state changes (only triggers if render not already called)
+  watch(() => state.value.html, (newVal, oldVal) => {
+    if (newVal !== oldVal) {
+      triggerRender()
     }
-  }, { deep: true })
+  })
 
   onUnmounted(() => {
     window.removeEventListener('message', handleConsoleMessage)

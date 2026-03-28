@@ -5,6 +5,10 @@ import Chat from '~/components/Chat.vue'
 import SandboxPanel from '~/components/SandboxPanel.vue'
 import type { ChatMessage } from '@/types/chat'
 
+definePageMeta({
+  ssr: false
+})
+
 export interface ChatSessionSettings extends Partial<Omit<ChatSession, 'id' | 'createTime'>> { }
 
 const { t } = useI18n()
@@ -109,7 +113,10 @@ provide('isSessionListVisible', isSessionListVisible)
             </div>
         </div>
         <ClientOnly>
-            <SandboxPanel v-if="sandbox.isEnabled.value && sandbox.isOpen.value" class="sandbox-panel" />
+            <SandboxPanel 
+                v-if="sandbox.isEnabled.value" 
+                :class="sandbox.isOpen.value ? 'sandbox-panel' : 'sandbox-panel-hidden'" 
+            />
         </ClientOnly>
     </div>
 </template>
@@ -165,6 +172,17 @@ provide('isSessionListVisible', isSessionListVisible)
     bottom: 0;
     width: var(--sandbox-width, 600px);
     z-index: 10;
+}
+
+.sandbox-panel-hidden {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--sandbox-width, 600px);
+    z-index: 10;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .menu-button {

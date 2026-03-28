@@ -13,14 +13,7 @@ onMounted(async () => {
   try {
     const { skills } = await $fetch<{ skills: { name: string; description: string; icon?: string }[] }>('/api/skills')
     
-    for (const skill of skills) {
-      try {
-        await $fetch(`/api/skills/config/${skill.name}`)
-        skillsWithConfig.value.push({ name: skill.name, hasConfig: true })
-      } catch {
-        // Skill doesn't have a config schema
-      }
-    }
+    skillsWithConfig.value = skills.map(skill => ({ name: skill.name, hasConfig: false }))
   } catch (e) {
     console.error('Failed to load skills', e)
   } finally {

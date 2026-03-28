@@ -34,17 +34,14 @@ export function clearSkillConfig(skillName: string): void {
 
 export function getSkillConfigsHeader(): { 'x-skill-configs': string } {
   const configs = skillConfigsStore.value
-  console.log('[SkillConfigs] getSkillConfigsHeader called, configs:', JSON.stringify(configs))
   const hasConfigs = Object.keys(configs).some(key => 
     configs[key] && Object.keys(configs[key]).length > 0
   )
   
   if (!hasConfigs) {
-    console.log('[SkillConfigs] No configs found, returning empty')
     return { 'x-skill-configs': encodeURIComponent(JSON.stringify({})) }
   }
   
-  console.log('[SkillConfigs] Returning configs:', configs)
   return { 'x-skill-configs': encodeURIComponent(JSON.stringify(configs)) }
 }
 

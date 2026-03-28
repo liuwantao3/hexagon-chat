@@ -92,39 +92,37 @@ const selectedSkills = computed({
 
 // Sandbox
 const sandbox = useSandbox()
-
-// Check if sandbox skill is enabled
-const isSandboxSkillEnabled = computed(() => {
-  return selectedSkills.value.includes('sandbox')
-})
+let lastSandboxUpdate = 0
 
 // Sandbox - handle tool results and message content
 const handleSandboxCode = (content: string, isToolResult?: boolean) => {
-  // Only process if sandbox is enabled in settings AND sandbox skill is selected
-  if (!sandbox?.isEnabled?.value || !isSandboxSkillEnabled.value) return false
+  console.log('[Sandbox] handleSandboxCode called, isToolResult:', isToolResult, 'content length:', content?.length)
+  
+  // Only process if sandbox is enabled in settings
+  if (!sandbox?.isEnabled?.value) {
+    console.log('[Sandbox] Sandbox not enabled')
+    return false
+  }
   if (!content || typeof content !== 'string') {
     return false
   }
   
-  // Only process tool results
-  if (!isToolResult) {
-    return false
-  }
-  
-  // Skip if content doesn't look like code (e.g., think sections)
-  if (!content.includes('{') && !content.includes('html') && !content.includes('<')) {
-    return false
-  }
-  
-  console.log('Processing tool result for sandbox:', content.substring(0, 100))
-  
   // Try to parse as JSON first
   try {
     const data = JSON.parse(content)
-    console.log('Tool result parsed, keys:', Object.keys(data))
+    console.log('[Sandbox] Content parsed as JSON, keys:', Object.keys(data))
     
+    // Check for sandbox tool result format (has html/css/js fields)
     if (data.html || data.code || data.js || data.js_code || data.css) {
-      console.log('Found code in tool result JSON!')
+      // Debounce: don't update if we just updated
+      const now = Date.now()
+      if (now - lastSandboxUpdate < 500) {
+        console.log('[Sandbox] Skipping duplicate update')
+        return true
+      }
+      lastSandboxUpdate = now
+      
+      console.log('[Sandbox] Found code in JSON! html length:', data.html?.length, 'css:', data.css?.length, 'js:', data.js?.length)
       sandbox.updateFromCodeBlocks(
         data.html || '',
         data.css || '',
@@ -133,9 +131,24 @@ const handleSandboxCode = (content: string, isToolResult?: boolean) => {
       return true
     }
   } catch (e) {
-    console.log('Tool result is not JSON')
+    // Not JSON, try markdown code blocks
   }
   
+  // Try markdown code blocks
+  const { htmlCode, cssCode, jsCode } = extractCodeBlocks(content)
+  if (htmlCode || cssCode || jsCode) {
+    const now = Date.now()
+    if (now - lastSandboxUpdate < 500) {
+      console.log('[Sandbox] Skipping duplicate update')
+      return true
+    }
+    lastSandboxUpdate = now
+    console.log('[Sandbox] Found code in markdown blocks')
+    sandbox.updateFromCodeBlocks(htmlCode, cssCode, jsCode)
+    return true
+  }
+  
+  console.log('[Sandbox] No code found to render')
   return false
 }
 
@@ -166,12 +179,7 @@ const fetchSkills = async () => {
     const skills = res.skills || []
     
     for (const skill of skills) {
-      try {
-        await $fetch(`/api/skills/config/${skill.name}`)
-        skill.hasConfig = true
-      } catch {
-        skill.hasConfig = false
-      }
+      skill.hasConfig = false
     }
     
     availableSkills.value = skills
@@ -207,17 +215,8 @@ const onConfigureSkill = (skillName: string, title: string) => {
 }
 
 const onConfigureSkillFromDropdown = async (skillName: string, title: string) => {
-  console.log('Configuring skill:', skillName, 'title:', title)
-  try {
-    await $fetch(`/api/skills/config/${skillName}`)
-    configureSkillName.value = skillName
-    configureSkillTitle.value = title
-    console.log('configureSkillName set to:', configureSkillName.value)
-    console.log('Modal should open now')
-  } catch (e) {
-    console.log('Config fetch failed:', e)
-    // Skill doesn't have config, ignore
-  }
+  configureSkillName.value = skillName
+  configureSkillTitle.value = title
 }
 
 const closeConfigureSkill = () => {
@@ -382,10 +381,10 @@ onReceivedMessage(data => {
       const toolCallId = data.data?.toolCallId
       const msgContent = data.data?.content || data.data?.message?.content || ''
       
-      console.log('Message data:', data.data, 'isToolResult:', isToolResult)
+      console.log('[Chat] Message received, isToolResult:', isToolResult, 'toolCallId:', toolCallId, 'content length:', msgContent?.length)
       
       if (msgContent) {
-        handleSandboxCode(msgContent, isToolResult, toolCallId)
+        handleSandboxCode(msgContent, isToolResult)
       }
       break
     case 'relevant_documents':
@@ -393,17 +392,6 @@ onReceivedMessage(data => {
       break
     case 'complete':
       sendingCount.value -= 1
-      // Only process sandbox if sandbox is enabled in settings AND sandbox skill is selected
-      if (sandbox?.isEnabled?.value && isSandboxSkillEnabled.value) {
-        const lastMessage = messages.value[messages.value.length - 1]
-        if (lastMessage && lastMessage.content) {
-          const { htmlCode, cssCode, jsCode } = extractCodeBlocks(lastMessage.content)
-          console.log('Sandbox code blocks found:', { htmlCode: !!htmlCode, cssCode: !!cssCode, jsCode: !!jsCode })
-          if (htmlCode || cssCode || jsCode) {
-            sandbox.updateFromCodeBlocks(htmlCode, cssCode, jsCode)
-          }
-        }
-      }
       break
     case 'abort':
       updateMessage(data, { type: 'canceled' })
