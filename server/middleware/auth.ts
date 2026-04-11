@@ -15,7 +15,7 @@ const parseAuthUser = (event: H3Event) => {
   if (authHeaderValue != null) {
     const extractedToken = extractToken(authHeaderValue)
     try {
-      return jwt.verify(extractedToken, SECRET)
+      return jwt.verify(extractedToken, SECRET as string)
     } catch (error) {
       console.log('Invalid token from Authorization header.')
       return null

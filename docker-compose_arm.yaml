@@ -7,19 +7,20 @@ services:
     volumes:
       - chromadb_data:/chroma/.chroma/index
 
-  chatollama:
+  hexagonchat:
     environment:
       - CHROMADB_URL=http://chromadb:8000
-      - DATABASE_URL=file:/app/sqlite/chatollama.sqlite
+      - DATABASE_URL=file:/app/sqlite/HexagonChat.sqlite
       - REDIS_HOST=redis
-    image: chatollama:latest
+      - SECRET=${SECRET}
+    image: hexagon-chat:latest
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "3000:3000"
     restart: always
     volumes:
-      - ~/.chatollama:/app/sqlite
+      - ~/.hexagonchat:/app/sqlite
 
   redis:
     image: redis:latest

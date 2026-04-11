@@ -19,13 +19,15 @@
   },
   "home": {
     "welcome": "欢迎来到 Hexagon",
-    "description": "Hexagon 是一个网络应用程序，可以用来管理您的 <a class=\"text-primary font-bold\" href=\"https://ollama.ai\" target=\"_blank\">Ollama</a> 服务器，并与来自世界任何地方的 LLMs 聊天。",
+    "description": "Hexagon 是一个强大的 LLM 应用探索平台，让您能够探索、实验和创新最新的语言模型技术。无论您是构建 AI 助手、创建自主智能体，还是利用各种技能和工具 —— 这个平台都提供了灵活性，让一切成为可能。",
     "quickStart": "快速开始",
-    "step1": "确保您的Ollama服务器可以公开访问。如果需要，您可以使用 <a class=\"text-primary\" href=\"https://ngrok.com/\" target=\"_blank\">ngrok</a> 来公开本地机器中的Ollama服务器。",
-    "step2": "去到 <a class=\"text-primary\" href=\"/settings\"> @:menu.settings </a> 页面来设置你的 Ollama 服务器的访问地址。",
-    "step3": "开始享受优秀的 Ollama 服务。",
+    "step1": "探索平台，访问 <a class=\"text-primary\" href=\"/settings\">设置</a> 页面配置您首选的 LLM 提供商（Ollama、OpenAI、Anthropic、 Gemini 等）。",
+    "step2": "前往 <a class=\"text-primary\" href=\"/models\">模型</a> 页面管理和下载来自配置提供商的模型。",
+    "step3": "开始您的探索之旅！访问 <a class=\"text-primary\" href=\"/chat\">聊天</a> 与 LLM 对话，或探索其他部分如技能、知识库等，以释放全部潜力。",
     "step3_1": "模型管理（查看、下载、删除） - <a class=\"text-primary\" href=\"/models\">链接</a>",
-    "step3_2": "与模型聊天 - <a class=\"text-primary\" href=\"/chat\">链接</a>"
+    "step3_2": "与模型聊天 - <a class=\"text-primary\" href=\"/chat\">链接</a>",
+    "step3_3": "知识库 - <a class=\"text-primary\" href=\"/knowledgebases\">链接</a>",
+    "step3_4": "技能市场 - <a class=\"text-primary\" href=\"/skills\">链接</a>"
   },
   "models": {
     "family": "家族",

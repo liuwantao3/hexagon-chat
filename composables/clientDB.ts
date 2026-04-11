@@ -46,7 +46,7 @@ export class MySubClassedDexie extends Dexie {
   chatSessions!: Table<ChatSession>
 
   // constructor() {
-  //   super('chat-ollama')
+  //   super('hexagon-chat')
   //   this.version(2).stores({
   //     chatSessions: '++id, updateTime',
   //     chatHistories: '++id, sessionId', // Primary key and indexed props
@@ -54,7 +54,7 @@ export class MySubClassedDexie extends Dexie {
   // }
 
   constructor() {
-    super('chat-ollama')
+    super('hexagon-chat')
     this.version(3).stores({
       chatSessions: '++id, userId, updateTime',
       chatHistories: '++id,userId, sessionId',

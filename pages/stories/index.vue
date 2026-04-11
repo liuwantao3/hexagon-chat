@@ -172,7 +172,7 @@ const imageModelOptions = [
   isImageStopping.value = false
   try {
     const keys = getKeysHeader()
-    const keysData = keys['x-chat-ollama-keys'] ? JSON.parse(decodeURIComponent(keys['x-chat-ollama-keys'])) : {}
+    const keysData = keys['x-hexagon-chat-keys'] ? JSON.parse(decodeURIComponent(keys['x-hexagon-chat-keys'])) : {}
     
     const selectedModelObj = chatModels.value.find(m => m.value === selectedModel.value)
     const modelFamily = selectedModelObj?.family
@@ -251,7 +251,7 @@ const imageModelOptions = [
         model: selectedImageModel.value
       },
       headers: {
-        'x-chat-ollama-keys': JSON.stringify({
+        'x-hexagon-chat-keys': JSON.stringify({
           minimax: keysData.minimax
         })
       },

@@ -136,9 +136,6 @@ export default defineNuxtConfig({
       }
     },
     server: {
-      allowedHosts: [
-        '91be-106-92-51-155.ngrok-free.app'
-      ]
     }
   },
 

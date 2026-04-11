@@ -19,13 +19,15 @@
   },
   "home": {
     "welcome": "Welcome to Hexagon",
-    "description": "Hexagon is a web application that allows you to manage your <a class=\"text-primary font-bold\" href=\"https://ollama.ai\" target=\"_blank\">Ollama</a> server and chat with the served LLMs from anywhere in the world.",
+    "description": "Hexagon is a powerful LLM Application Playground that lets you explore, experiment, and innovate with the latest language model technologies. Whether you're building AI assistants, creating autonomous agents, or leveraging skills and tools — this platform provides the flexibility to try anything.",
     "quickStart": "Quick Start",
-    "step1": "Make sure your Ollama server is publicly accessible. If required, you can use <a class=\"text-primary\" href=\"https://ngrok.com/\" target=\"_blank\">ngrok</a> to expose your Ollama server in your local machine to the public.",
-    "step2": "Go to <a class=\"text-primary\" href=\"/settings\"> @:menu.settings </a> to set the host of your Ollama server.",
-    "step3": "Start enjoying the excellence of Ollama.",
-    "step3_1": "Models management(list / download / delete) - <a class=\"text-primary\" href=\"/models\">Link</a>",
-    "step3_2": "Chat with the models - <a class=\"text-primary\" href=\"/chat\">Link</a>"
+    "step1": "Explore the platform by visiting the <a class=\"text-primary\" href=\"/settings\">Settings</a> page to configure your preferred LLM providers (Ollama, OpenAI, Anthropic, Gemini, and more).",
+    "step2": "Go to the <a class=\"text-primary\" href=\"/models\">Models</a> page to manage and download models from your configured providers.",
+    "step3": "Start your journey! Visit <a class=\"text-primary\" href=\"/chat\">Chat</a> to converse with LLMs, or explore other sections like Skills, Knowledge Bases, and more to unleash the full potential.",
+    "step3_1": "Models management (list / download / delete) - <a class=\"text-primary\" href=\"/models\">Link</a>",
+    "step3_2": "Chat with the models - <a class=\"text-primary\" href=\"/chat\">Link</a>",
+    "step3_3": "Knowledge bases - <a class=\"text-primary\" href=\"/knowledgebases\">Link</a>",
+    "step3_4": "Skills marketplace - <a class=\"text-primary\" href=\"/skills\">Link</a>"
   },
   "models": {
     "family": "Family",

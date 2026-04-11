@@ -5,7 +5,11 @@ import bcrypt from "bcrypt"
 import { Role } from './signup.post'
 
 const refreshTokens: Record<number, Record<string, any>> = {}
-export const SECRET = process.env.SECRET || 'changeit'
+const SECRET = process.env.SECRET
+if (!SECRET) {
+  throw new Error('SECRET environment variable is required. Please set it before starting the server.')
+}
+export { SECRET }
 
 const validate = async (name: string, password: string) => {
   if (!name || !password) {

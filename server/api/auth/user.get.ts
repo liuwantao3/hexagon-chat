@@ -17,7 +17,7 @@ const ensureAuth = (event: H3Event) => {
 
   const extractedToken = extractToken(authHeaderValue)
   try {
-    return jwt.verify(extractedToken, SECRET)
+    return jwt.verify(extractedToken, SECRET as string)
   } catch (error) {
     console.error('Login failed with error:', error)
     // throw createError({ statusCode: 403, statusMessage: 'You must be logged in to use this endpoint' })

@@ -91,7 +91,7 @@ export interface ContextKeys {
 
 export default defineEventHandler((event) => {
   const headers = getRequestHeaders(event)
-  const value = headers['x-chat-ollama-keys']
+  const value = headers['x-hexagon-chat-keys']
   const data = (value ? tryParseJson(decodeURIComponent(value), {}) : {}) as ContextKeys
 
   event.context.keys = {

@@ -59,7 +59,7 @@ export const DEFAULT_KEYS_STORE: ContextKeys = {
 export const keysStore = useStorage<ContextKeys>('keys', DEFAULT_KEYS_STORE)
 
 export const getKeysHeader = () => {
-  const keysHeader = { 'x-chat-ollama-keys': encodeURIComponent(JSON.stringify(keysStore.value)) }
+  const keysHeader = { 'x-hexagon-chat-keys': encodeURIComponent(JSON.stringify(keysStore.value)) }
   const skillConfigsHeader = getSkillConfigsHeader()
   return { ...keysHeader, ...skillConfigsHeader }
 }

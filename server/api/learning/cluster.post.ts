@@ -173,7 +173,7 @@ export default defineEventHandler(async (event) => {
   } = body
 
   const headers = getRequestHeaders(event)
-  const keysValue = headers['x-chat-ollama-keys']
+  const keysValue = headers['x-hexagon-chat-keys']
   const keysData = keysValue ? tryParseJson(decodeURIComponent(keysValue), {}) : {}
   
   const keys = {

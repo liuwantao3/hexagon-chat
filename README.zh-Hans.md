@@ -108,7 +108,7 @@ $ docker compose up
 如果这是您第一次在 Docker 中启动 `Hexagon`，请初始化 SQLite 数据库：
 
 ```shell
-$ docker compose exec chatollama npx prisma migrate dev
+$ docker compose exec hexagonchat npx prisma migrate dev
 ```
 
 #### 使用知识库的提前准备
@@ -145,7 +145,7 @@ $ docker compose exec ollama ollama pull nomic-embed-text:latest
 
 ##### 关系数据
 
-关系数据，包括知识库记录及其关联文件，存储在 SQLite 数据库文件中，保存在 `~/.chatollama/chatollama.sqlite`。
+关系数据，包括知识库记录及其关联文件，存储在 SQLite 数据库文件中，保存在 `~/.hexagonchat/HexagonChat.sqlite`。
 
 #### 代理
 

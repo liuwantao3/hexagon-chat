@@ -38,7 +38,7 @@ jobs:
         file: ./Dockerfile
         platforms: linux/amd64,linux/arm64/v8
         push: true
-        tags: 0001coder/chatollama:latest
+        tags: 0001coder/hexagon-chat:latest
         cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=local,dest=/tmp/.buildx-cache
 

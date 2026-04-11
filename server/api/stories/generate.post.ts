@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
   // Get keys from header (same as other APIs)
   const headers = getRequestHeaders(event)
-  const keysValue = headers['x-chat-ollama-keys']
+  const keysValue = headers['x-hexagon-chat-keys']
   const keysData = keysValue ? tryParseJson(decodeURIComponent(keysValue), {}) : {}
   
   // Set keys on event context with proper structure (matching middleware)

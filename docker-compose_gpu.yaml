@@ -23,18 +23,19 @@ services:
     volumes:
       - chromadb_data:/chroma/.chroma/index
 
-  chatollama:
+  hexagonchat:
     environment:
       - CHROMADB_URL=http://chromadb:8000
-      - DATABASE_URL=file:/app/sqlite/chatollama.sqlite
+      - DATABASE_URL=file:/app/sqlite/HexagonChat.sqlite
       - REDIS_HOST=redis
-    image: 0001coder/chatollama:latest
+      - SECRET=${SECRET}
+    image: 0001coder/hexagon-chat:latest
     ports:
       - "3000:3000"
     pull_policy: always
     restart: always
     volumes:
-      - ~/.chatollama:/app/sqlite
+      - ~/.hexagonchat:/app/sqlite
 
   redis:
     image: redis:latest

@@ -61,7 +61,7 @@ export class McpService {
 
   private async getToolsFromTransport(transport: StdioClientTransport): Promise<any[]> {
     const client = new Client({
-      name: "chatollama-client",
+      name: "hexagon-chat-client",
       version: "1.0.0",
     }, {
       capabilities: {},

@@ -111,7 +111,7 @@ As `Hexagon` is running within a docker container, you should set Ollama server 
 Make sure you initialize the SQLite database as below if you are launching the dockerized `Hexagon` for the first time:
 
 ```shell
-$ docker compose exec chatollama npx prisma migrate dev
+$ docker compose exec hexagonchat npx prisma migrate dev
 ```
 #### Prerequisites for knowledge bases
 When using KnowledgeBases, we need a valid embedding model in place. It can be one of the models downloaded by Ollama or from 3rd party service provider for example, OpenAI.
@@ -146,7 +146,7 @@ With `docker-compose.yaml`, a dockerized Chroma database is run side by side wit
 
 ##### Relational data
 
-The relational data including knowledge base records and their associated files are stored in a SQLite database file persisted and mounted from `~/.chatollama/chatollama.sqlite`.
+The relational data including knowledge base records and their associated files are stored in a SQLite database file persisted and mounted from `~/.hexagonchat/HexagonChat.sqlite`.
 
 #### Proxy
 
