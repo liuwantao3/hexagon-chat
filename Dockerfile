@@ -1,4 +1,4 @@
-ARG NODE_VERSION=20.13.1
+ARG NODE_VERSION=20.19.0
 
 FROM node:${NODE_VERSION}-slim
 
@@ -9,15 +9,14 @@ WORKDIR /app
 # DATABASE_URL environment variable takes precedence over .env file configuration
 ENV DATABASE_URL=file:/app/sqlite/chatollama.sqlite
 
-COPY pnpm-lock.yaml package.json ./
-RUN npm install -g pnpm
-RUN pnpm i
+COPY package-lock.json package.json ./
+RUN npm config set registry https://registry.npmmirror.com && npm ci --legacy-peer-deps
 
 COPY . .
 
-RUN pnpm run prisma-generate
+RUN npm run prisma-generate
 
-RUN pnpm run build
+RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build
 
 EXPOSE 3000
 

@@ -15,7 +15,6 @@ import { resolveCoreference } from '~/server/coref'
 import { concat } from "@langchain/core/utils/stream"
 import { MODEL_FAMILIES } from '~/config'
 import { McpService } from '@/server/utils/mcp'
-import { codeExecutionTools } from '@/server/utils/codeExecution'
 import { svgTools } from '@/server/utils/svgTool'
 import { imageTools, setImageToolKeys } from '@/server/utils/imageTool'
 import { zodToJsonSchema } from 'zod-to-json-schema'
@@ -99,9 +98,9 @@ function switchToSecondaryKeys(event: H3Event, family: string): boolean {
 }
 
 interface RequestBody {
-    knowledgebaseId: number
+    knowledgebaseId?: string
     model: string
-    family: string
+    family?: string
     messages: {
         role: 'system' | 'user' | 'assistant'
         content: string
@@ -109,7 +108,6 @@ interface RequestBody {
         toolResult: boolean
     }[]
     stream: any
-    codeAgentEnabled?: boolean
     skills?: string[]
 }
 
@@ -161,10 +159,9 @@ const normalizeMessages = (messages: RequestBody['messages']): BaseMessage[] => 
 
 export default defineEventHandler(async (event) => {
     try {
-        const { knowledgebaseId, model, family, messages, stream, codeAgentEnabled, skills } = await readBody<RequestBody>(event)
+        const { knowledgebaseId, model, family, messages, stream, skills } = await readBody<RequestBody>(event)
 
         console.log("model family stream", model, family, stream)
-        console.log("codeAgentEnabled:", codeAgentEnabled)
         if (knowledgebaseId) {
             console.log("Chat with knowledge base with id: ", knowledgebaseId)
             const knowledgebase = await prisma.knowledgeBase.findUnique({
@@ -271,22 +268,25 @@ export default defineEventHandler(async (event) => {
             // Load skill tools and system prompts only if needed
             let skillTools: any[] = []
             let skillSystemPrompt = ''
-            if (codeAgentEnabled || skills?.length) {
+            const effectiveSkills = skills || []
+            
+            if (effectiveSkills?.length) {
                 await skillLoader.loadAll(true)
-                skillTools = skills?.length ? skillLoader.getAllTools(skills) : []
-                skillSystemPrompt = skills?.length ? skillLoader.getSystemPrompt(skills) : ''
+                skillTools = skillLoader.getAllTools(effectiveSkills)
+                skillSystemPrompt = skillLoader.getSystemPrompt(effectiveSkills)
                 
-                if (skills?.length && event.context.skillConfigs) {
+                if (event.context.skillConfigs) {
                     setSkillConfigs(event.context.skillConfigs)
                 }
             }
 
-            // Only load MCP tools if codeAgentEnabled
-            const normalizedTools = codeAgentEnabled ? await mcpService.listTools() : []
+            // Load MCP tools when skills are selected
+            const normalizedTools = effectiveSkills?.length ? await mcpService.listTools() : []
 
-            // Combine tools only if codeAgentEnabled or skills are selected
-            const toolsToUse = (codeAgentEnabled || skills?.length)
-                ? [...(codeAgentEnabled ? codeExecutionTools : []), ...(codeAgentEnabled ? svgTools : []), ...(codeAgentEnabled ? imageTools : []), ...normalizedTools, ...skillTools]
+            // Combine tools - svg/image tools available when code-runner skill is selected
+            const hasCodeRunner = effectiveSkills.includes('code-runner')
+            const toolsToUse = effectiveSkills?.length
+                ? [...(hasCodeRunner ? svgTools : []), ...(hasCodeRunner ? imageTools : []), ...normalizedTools, ...skillTools]
                 : []
             const toolsMap = toolsToUse.reduce((acc, t) => {
                 acc[t.name] = t
@@ -296,7 +296,7 @@ export default defineEventHandler(async (event) => {
             // Bind tools and use Agent for multi-round execution
             // Inject system prompt for code agent mode
             let finalMessages = messages
-            if (codeAgentEnabled && toolsToUse.length > 0) {
+            if (toolsToUse.length > 0) {
                 const toolDescriptions = toolsToUse.map(t => t.name + ': ' + t.description).join(', ')
                 const codeAgentSystemPrompt = `You have access to tools. When a task requires computation, data processing, or code execution:
 1. Use the available tools to accomplish the task step by step
@@ -334,23 +334,22 @@ Available tools: ${toolDescriptions}`
                 ]
             }
 
-            console.log('[CodeAgent] Final messages count:', finalMessages.length)
+            console.log('[Skills] Final messages count:', finalMessages.length)
             console.log('[Skills] Loaded skills:', skills, 'with', skillTools.length, 'tools')
-            console.log('[CodeAgent] toolsToUse:', toolsToUse.map(t => t.name))
-            console.log('[CodeAgent] bindTools check - toolsToUse.length:', toolsToUse.length, 'codeAgentEnabled:', codeAgentEnabled, 'skills?.length:', skills?.length)
+            console.log('[Skills] toolsToUse:', toolsToUse.map(t => t.name))
 
             if (family === MODEL_FAMILIES.anthropic && toolsToUse?.length) {
                 if (llm?.bindTools) {
                     llm = llm.bindTools(toolsToUse) as BaseChatModel
-                    console.log('[CodeAgent] Bound tools to Anthropic model')
+                    console.log('[Skills] Bound tools to Anthropic model')
                 }
             } else if (llm instanceof ChatOllama) {
                 // Ollama with tools - handled separately if needed
-            } else if (toolsToUse.length > 0 && (codeAgentEnabled || skills?.length)) {
+            } else if (toolsToUse.length > 0) {
                 // For other models that support function calling
                 if (llm?.bindTools) {
                     llm = llm.bindTools(toolsToUse) as BaseChatModel
-                    console.log('[CodeAgent] Bound tools via bindTools for:', family)
+                    console.log('[Skills] Bound tools via bindTools for:', family)
                 }
             }
 

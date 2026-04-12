@@ -1,34 +1,52 @@
 [English](README.md) | 简体中文
 
-# Hexagon
+# Hexagon Chat
 
-`Hexagon` 是一个基于 LLMs（大语言模型）的开源聊天机器人平台，支持多种语言模型，包括：
+`Hexagon Chat` 是一个基于 LLMs（大语言模型）的开源聊天机器人平台，支持多种语言模型，包括：
 
-- Ollama 服务模型
+- Ollama
 - OpenAI
 - Azure OpenAI
 - Anthropic
 - Moonshot
+- MiniMax
 - Gemini
 - Groq
 
-`Hexagon` 支持多种聊天类型：
+`Hexagon Chat` 支持多种聊天模式：
 
 - 与 LLMs 免费聊天
-- 基于知识库与 LLMs 聊天
+- 基于知识库聊天（RAG）
+- 交互式沙箱开发
+- 带源引用的网络研究
 
-`Hexagon` 的功能列表：
+`Hexagon Chat` 功能列表：
 
 - Ollama 模型管理
-- 知识库管理
-- 聊天
-- 商业 LLMs API 密钥管理
+- 知识库（RAG）支持 Chroma/Milvus
+- 聊天界面
+- 多种 LLM 提供商 API 密钥管理
+- HTML/CSS/JS 代码沙箱执行
+- 网络研究Skill（带源引用）
+- PDF 编辑器Skill
+- MCP 服务器构建器
+- PowerPoint 生成器
+- 代码执行环境
+- 故事（语音和音频生成）
+- 多模型支持（包含视觉能力）
+- 多语言支持（i18n）
+- 用户认证
+- Redis 缓存
+
+## 快速开始
+
+使用 `Hexagon Chat` 前，请确保所有组件已启动。
 
 ### 支持的向量数据库
 
-`Hexagon` 支持 2 种向量数据库：Milvus 和 Chroma。
+`Hexagon Chat` 支持 2 种向量数据库：Milvus 和 Chroma。
 
-请参阅 `.env.example` 文件，了解如何使用向量数据库配置。
+配置请参阅 `.env.example`：
 
 ```
 # 支持的值：chroma，milvus
@@ -37,47 +55,40 @@ CHROMADB_URL=http://localhost:8000
 MILVUS_URL=http://localhost:19530
 ```
 
-默认情况下，`Hexagon` 使用了 Chroma。如果您想使用 Milvus，请将 `VECTOR_STORE` 设置为 `milvus`，并指定相应的 URL。它在开发服务器和 Docker 容器中都可用。
+默认情况下使用 Chroma。使用 Milvus 时，设置 `VECTOR_STORE` 为 `milvus` 并指定 URL。
 
 ### 使用 Nuxt 3 开发服务器
 
-如果您想在最新的代码库中运行，并且可以实时应用更改，clone 该存储库，并按照以下步骤进行：
+如需在最新代码库上运行并实时应用更改：
 
 1. 安装 Ollama 服务器
 
-    您需要运行 Ollama 服务器。按照 [Ollama](https://github.com/ollama/ollama) 的安装指南进行安装。默认情况下，它运行在 http://localhost:11434。
+    按 [Ollama](https://github.com/ollama/ollama) 安装指南操作。默认运行在 http://localhost:11434。
 
 2. 安装 Chroma
 
-    请参阅 [https://docs.trychroma.com/getting-started](https://docs.trychroma.com/getting-started) 获取 Chroma 安装指南。
-
-    我们建议在 Docker 容器中运行：
+    参考 [https://docs.trychroma.com/getting-started](https://docs.trychroma.com/getting-started)。
 
     ```bash
-    # https://hub.docker.com/r/chromadb/chroma/tags
-
     docker pull chromadb/chroma
     docker run -d -p 8000:8000 chromadb/chroma
     ```
-    现在，ChromaDB 正在运行于 http://localhost:8000
 
 3. Hexagon 设置
 
-    现在，我们可以完成必要的设置，以便运行 Hexagon。
-
-    3.1 复制 `.env.example` 文件到 `.env` 文件：
+    3.1 复制 `.env.example` 到 `.env`：
 
     ```bash
     cp .env.example .env
     ```
 
-    3.2 确保安装依赖项：
+    3.2 安装依赖：
 
     ```bash
     pnpm install
     ```
 
-    3.3 运行迁移命令以创建数据库表：
+    3.3 运行 Prisma 创建数据库表：
 
     ```bash
     pnpm prisma-migrate
@@ -85,9 +96,7 @@ MILVUS_URL=http://localhost:19530
 
 4. 启动开发服务器
 
-    > 确保 __[Ollama Server](#ollama-server)__  服务器和 __[ChromaDB](#install-chromadb-and-startup)__  都正在运行。
-
-    启动开发服务器在 `http://localhost:3000`：
+    > 确保 __[Ollama 服务器](#ollama-server)__ 和 __[ChromaDB](#install-chromadb-and-startup)__ 正在运行。
 
     ```bash
     pnpm dev
@@ -95,67 +104,59 @@ MILVUS_URL=http://localhost:19530
 
 ### 使用 Docker
 
-这是使用 `Hexagon` 的最简单方法。
-
-唯一需要的是复制一份 [docker-compose.yaml](./docker-compose.yaml)。请下载它，并执行以下命令以启动 `Hexagon`：
+使用 `Hexagon Chat` 的最简单方式。
 
 ```shell
 $ docker compose up
 ```
 
-由于 `Hexagon` 在 Docker 容器中运行，您需要将 Ollama 服务器设置为 `http://host.docker.internal:11434`，假设您的 Ollama 服务器在本地运行默认端口。
+由于在 Docker 容器中运行，需将 Ollama 设置为 `http://host.docker.internal:11434`。
 
-如果这是您第一次在 Docker 中启动 `Hexagon`，请初始化 SQLite 数据库：
+首次启动时初始化 SQLite 数据库：
 
 ```shell
 $ docker compose exec hexagonchat npx prisma migrate dev
 ```
 
-#### 使用知识库的提前准备
+#### 知识库前置条件
 
-使用知识库时，我们需要一个有效的嵌入模型。在这里可以是 Ollama 下载的模型或来自第三方服务提供商，例如 OpenAI。
+使用知识库时需要有效的嵌入模型。
 
-**Ollama 管理嵌入模型**
+**Ollama 管理的嵌入模型**
 
-我们推荐使用 `nomic-embed-text` 模型。
-
-可以在 Models 页面 [http://localhost:3000/models](http://localhost:3000/models) 或使用 CLI 进行下载：
+推荐使用 `nomic-embed-text`。通过模型页面或 CLI 下载：
 
 ```shell
-# 在 docker-compose.yaml 文件夹中
-
 $ docker compose exec ollama ollama pull nomic-embed-text:latest
 ```
 
 **OpenAI 嵌入模型**
 
-如果您想使用 OpenAI，请确保您设置了有效的 OpenAI API 密钥，并选择以下之一的 OpenAI 嵌入模型：
+使用 OpenAI 时在设置中填写有效 API Key。可用模型：
 
 - `text-embedding-3-large`
 - `text-embedding-3-small`
 - `text-embedding-ada-002`
 
-#### Docker 容器数据存储
+#### Docker 数据存储
 
-有两个类型的数据存储：向量数据和关系数据。详细信息请参阅 [docker-compose.yaml](./docker-compose.yaml)。
+两种数据类型：向量数据和关系数据。
 
 ##### 向量数据
 
-使用 `docker-compose.yaml`，会在同一 Docker 容器中运行 Chroma 数据库。数据将被 保存在 Docker 卷中。
+使用 `docker-compose.yaml`，Chroma 与 `Hexagon Chat` 一起运行。数据保存在 Docker 卷中。
 
 ##### 关系数据
 
-关系数据，包括知识库记录及其关联文件，存储在 SQLite 数据库文件中，保存在 `~/.hexagonchat/HexagonChat.sqlite`。
+知识库记录和文件存储在 SQLite：`~/.hexagonchat/HexagonChat.sqlite`。
 
-#### 代理
+#### 代理配置
 
-我们提供了代理配置功能。对于特定的使用，请点击 [这里](docs/proxy-usage.md)。
+请参阅 [docs/proxy-usage.md](docs/proxy-usage.md)。
 
 ## 开发者指南
 
-由于 `Hexagon` 处于快速开发中，特性、接口和数据库架构可能会发生变化。请在每次 `git pull` 时，确保您的依赖项和数据库架构始终保持同步。
+由于 `Hexagon Chat` 处于活跃开发中，请在每次 `git pull` 时执行：
 
-1. 安装最新依赖项
-    - `pnpm install`
-2. Prisma 迁移
-    - `pnpm prisma-migrate`
+1. 安装依赖：`pnpm install`
+2. Prisma 迁移：`pnpm prisma-migrate`

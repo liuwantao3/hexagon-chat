@@ -2,36 +2,51 @@ English | [简体中文](README.zh-Hans.md)
 
 # Hexagon Chat
 
-`Hexagon Chat` is an open source chatbot based on LLMs. It supports a wide range of language models including:
+`Hexagon Chat` is an open-source chatbot platform based on LLMs. It supports a wide range of language models including:
 
-- Ollama served models
+- Ollama
 - OpenAI
 - Azure OpenAI
 - Anthropic
 - Moonshot
+- MiniMax
 - Gemini
 - Groq
 
-`Hexagon Chat` supports multiple types of chat:
+`Hexagon Chat` supports multiple chat modes:
 
 - Free chat with LLMs
-- Chat with LLMs based on knowledge base
+- Chat with knowledge bases (RAG)
+- Interactive sandbox for web development
+- Web research with source citations
 
-`Hexagon` feature list:
+`Hexagon Chat` feature list:
+
 - Ollama models management
-- Knowledge bases management
-- Chat
-- Commercial LLMs API keys management
+- Knowledge bases (RAG) with Chroma/Milvus
+- Chat interface
+- Multiple LLM provider API keys management
+- Code sandbox for HTML/CSS/JS execution
+- Web researcher skill
+- PDF editor skill
+- MCP server builder
+- PowerPoint generator
+- Code execution environment
+- Stories (Voice & Audio generation)
+- Multi-model support with vision capabilities
+- Multi-language support (i18n)
+- User authentication
+- Redis caching
 
 ## Quick Start
 
-As a user of `Hexagon`, please walk through the document below, to make sure you get all the components up and running before starting using `Hexagon`.
+As a user of `Hexagon Chat`, please walk through the document below to ensure you have all components up and running before starting.
 
 ### Supported Vector Databases
 
-`Hexagon` supported 2 types of vector databases: Milvus and Chroma.
+`Hexagon Chat` supports 2 types of vector databases: Milvus and Chroma.
 
-Please refer to the `.env.example` for how to work with your vector database setup.
+Please refer to the `.env.example` for configuration:
 
 ```
 # Supported values: chroma, milvus
@@ -40,47 +55,40 @@ CHROMADB_URL=http://localhost:8000
 MILVUS_URL=http://localhost:19530
 ```
 
-By default `Hexagon` is using Chroma. If you'd like to use Milvus, set `VECTOR_STORE` to `milvus` and specify the corresponding URL. It works both in the development server and Docker containers.
+By default `Hexagon Chat` uses Chroma. To use Milvus, set `VECTOR_STORE` to `milvus` and specify the URL.
 
 ### Use with Nuxt 3 Development Server
 
-If you'd like to run with the latest code base and apply changes as needed, you can clone this repository and follow the steps below.
+If you'd like to run with the latest code base and apply changes as needed:
 
 1. Install and run Ollama server
 
-    You will need an Ollama server running. Follow the installation guide of [Ollama](https://github.com/ollama/ollama). By default, it's running on http://localhost:11434.    
+    Follow [Ollama](https://github.com/ollama/ollama) installation. By default, it runs on http://localhost:11434.
 
 2. Install Chroma
 
-    Please refer to [https://docs.trychroma.com/getting-started](https://docs.trychroma.com/getting-started) for Chroma installation.
-
-    We recommend you run it in a docker container:
+    Refer to [https://docs.trychroma.com/getting-started](https://docs.trychroma.com/getting-started).
 
     ```bash
-    #https://hub.docker.com/r/chromadb/chroma/tags
-
     docker pull chromadb/chroma
     docker run -d -p 8000:8000 chromadb/chroma
     ```
-    Now, ChromaDB is running on http://localhost:8000
 
 3. Hexagon Setup
 
-    Now, we can complete the necessary setup to run Hexagon.
-
-    3.1 Copy the `.env.example` file to `.env` file:
+    3.1 Copy the `.env.example` file to `.env`:
 
     ```bash
     cp .env.example .env
     ```
 
-    3.2 Make sure to install the dependencies:
+    3.2 Install dependencies:
 
     ```bash
     pnpm install
     ```
 
-    3.3 Run a migration to create your database tables with Prisma Migrate
+    3.3 Run Prisma migrate to create database tables:
 
     ```bash
     pnpm prisma-migrate
@@ -90,73 +98,65 @@ If you'd like to run with the latest code base and apply changes as needed, you 
 
     > Make sure both __[Ollama Server](#ollama-server)__ and __[ChromaDB](#install-chromadb-and-startup)__ are running.
 
-    Start the development server on `http://localhost:3000`:
-
     ```bash
     pnpm dev
     ```
 
 ### Use with Docker
 
-This is the easist way to use `Hexagon`.
-
-The only thing you need is a copy of [docker-compose.yaml](./docker-compose.yaml). Please download it and execute the command below to launch `Hexagon`.
+The easiest way to use `Hexagon Chat`.
 
 ```shell
 $ docker compose up
 ```
 
-As `Hexagon` is running within a docker container, you should set Ollama server to `http://host.docker.internal:11434` in the Settings section, assuming your Ollama server is running locally with default port.
+Since `Hexagon Chat` runs in a Docker container, set Ollama server to `http://host.docker.internal:11434` in Settings.
 
-Make sure you initialize the SQLite database as below if you are launching the dockerized `Hexagon` for the first time:
+If launching for the first time, initialize the SQLite database:
 
 ```shell
 $ docker compose exec hexagonchat npx prisma migrate dev
 ```
-#### Prerequisites for knowledge bases
-When using KnowledgeBases, we need a valid embedding model in place. It can be one of the models downloaded by Ollama or from 3rd party service provider for example, OpenAI.
+
+#### Prerequisites for Knowledge Bases
+
+When using Knowledge Bases, you need a valid embedding model.
 
 **Ollama Managed Embedding Model**
 
-We recommend you download `nomic-embed-text` model for embedding purpose.
-
-You can do so on Models page http://localhost:3000/models, or via CLI as below if you are using Docker.
+We recommend `nomic-embed-text` model. Download via Models page or CLI:
 
 ```shell
-# In the folder of docker-compose.yaml
-
 $ docker compose exec ollama ollama pull nomic-embed-text:latest
 ```
 
 **OpenAI Embedding Model**
 
-If you prefer to use OpenAI, please make sure you set a valid OpenAI API Key in Settings, and fill with one of the OpenAI embedding models listed below:
+If using OpenAI, set a valid API Key in Settings. Available models:
 
 - `text-embedding-3-large`
 - `text-embedding-3-small`
 - `text-embedding-ada-002`
 
-#### Data Storage with Docker Containers
+#### Data Storage with Docker
 
-There are 2 types of data storage, vector data and relational data. See the summary below and for more details, please refer to [docker-compose.yaml](./docker-compose.yaml) for the settings.
+Two types of data storage: vector data and relational data.
 
 ##### Vector data
 
-With `docker-compose.yaml`, a dockerized Chroma database is run side by side with `Hexagon`. The data is persisted in a docker volume.
+With `docker-compose.yaml`, Chroma runs side by side with `Hexagon Chat`. Data persists in a Docker volume.
 
 ##### Relational data
 
-The relational data including knowledge base records and their associated files are stored in a SQLite database file persisted and mounted from `~/.hexagonchat/HexagonChat.sqlite`.
+Knowledge base records and files are stored in SQLite: `~/.hexagonchat/HexagonChat.sqlite`.
 
-#### Proxy
+#### Proxy Configuration
 
-We have provided a proxy configuration feature. For specific usage, please click [here](docs/proxy-usage.md).
+See [docs/proxy-usage.md](docs/proxy-usage.md).
 
 ## Developers Guide
 
-As Hexagon is still under active development, features, interfaces and database schema may be changed. Please follow the instructions below in your every `git pull` to make sure your dependencies and database schema are always in sync.
+As Hexagon Chat is under active development, please follow these steps on every `git pull`:
 
-1. Install the latest dependencies
-    - `pnpm install`
-2. Prisma migrate
-    - `pnpm prisma-migrate`
+1. Install dependencies: `pnpm install`
+2. Prisma migrate: `pnpm prisma-migrate`

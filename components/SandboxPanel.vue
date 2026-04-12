@@ -134,10 +134,12 @@ const consoleStyle = computed(() => ({
       @mousedown="handleWidthMouseDown"
     />
     
-    <div class="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-      <span class="font-semibold text-sm">{{ t('sandbox.title') || 'Sandbox' }}</span>
-      <div class="flex items-center gap-1">
-        <UButton
+      <div class="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+        <div class="flex items-center gap-2">
+          <span class="font-semibold text-sm">{{ t('sandbox.title') || 'Sandbox' }}</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <UButton
           icon="i-heroicons-arrow-path"
           size="xs"
           variant="ghost"

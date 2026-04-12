@@ -6,37 +6,39 @@ services:
     restart: always
     volumes:
       - chromadb_volume:/chroma/chroma
+    networks:
+      - hexagon-network
 
   hexagonchat:
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       - CHROMADB_URL=http://chromadb:8000
       - DATABASE_URL=file:/app/sqlite/HexagonChat.sqlite
       - REDIS_HOST=redis
-      - SECRET=${SECRET}
-      # - COHERE_API_KEY=xxxxx
-      # - COHERE_MODEL=ms-marco-MiniLM-L-6-v2
-      # - COHERE_BASE_URL=http://peanutshell:8000/v1
+      - SECRET=${SECRET:-your-secret-key-change-in-production}
       - CODE_RUNNER_URL=http://code-runner:8080
-    image: 0001coder/hexagon-chat:latest
-    pull_policy: always
-    #extra_hosts:
-    #  - "host.docker.internal:host-gateway"
     ports:
       - "3000:3000"
     restart: always
     volumes:
       - ~/.hexagonchat:/app/sqlite
+    networks:
+      - hexagon-network
+    depends_on:
+      - chromadb
+      - redis
 
   redis:
-    image: redis:latest
+    image: redis:6-alpine
+    ports:
+      - "6379:6379"
     restart: always
     volumes:
       - redis_data:/data
-
-  peanutshell:
-    image: ghcr.io/sugarforever/peanut-shell:latest
-    volumes:
-      - hf_data:/root/.cache
+    networks:
+      - hexagon-network
 
   code-runner:
     build:
@@ -51,6 +53,8 @@ services:
       - code-runner-output:/tmp/code-runner-output
     restart: always
     privileged: true
+    networks:
+      - hexagon-network
     depends_on:
       - code-runner-python
 
@@ -60,9 +64,15 @@ services:
       dockerfile: Dockerfile
     image: code-runner-python:latest
     pull_policy: never
+    restart: always
+    networks:
+      - hexagon-network
+
+networks:
+  hexagon-network:
+    driver: bridge
 
 volumes:
   chromadb_volume:
   redis_data:
-  hf_data:
   code-runner-output:

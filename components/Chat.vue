@@ -78,12 +78,6 @@ const stripThinkSection = computed({
   set: (val) => { chatDefaultSettings.value.stripThinkSection = val },
 })
 
-// Code Agent toggle
-const codeAgentEnabled = computed({
-  get: () => chatDefaultSettings.value.codeAgentEnabled || false,
-  set: (val) => { chatDefaultSettings.value.codeAgentEnabled = val },
-})
-
 // Skills selector
 const selectedSkills = computed({
   get: () => chatDefaultSettings.value.skills || [],
@@ -357,7 +351,6 @@ const onSend = async (data: ChatBoxFormData) => {
           sessionId: sessionInfo.value!.id!,
           //sessionId: sessionInfo.value?.id ?? null,
           timestamp,
-          codeAgentEnabled: codeAgentEnabled.value,
           skills: selectedSkills.value,
         },
       })
@@ -557,14 +550,6 @@ async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
                        icon="i-iconoir-brain"
                        :color="stripThinkSection ? 'primary' : 'gray'"
                        @click="toggleStripThinkSection"
-                       class="mr-4" />
-            </UTooltip>
-            <!-- Code Agent Toggle -->
-            <UTooltip :text="codeAgentEnabled ? 'Disable Code Agent' : 'Enable Code Agent'" :popper="{ placement: 'top-start' }">
-              <UButton
-                       icon="i-heroicons-code-bracket-square-20-solid"
-                       :color="codeAgentEnabled ? 'primary' : 'gray'"
-                       @click="codeAgentEnabled = !codeAgentEnabled"
                        class="mr-4" />
             </UTooltip>
             <!-- Skills Dropdown -->

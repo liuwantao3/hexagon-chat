@@ -5,13 +5,11 @@ export const chatDefaultSettings = useStorage<{
   models: string[]
   attachedMessagesCount: number
   stripThinkSection: boolean
-  codeAgentEnabled: boolean
   skills: string[]
 }>('chat-default-settings', {
   models: [],
   attachedMessagesCount: DEFAULT_ATTACHED_MESSAGES_COUNT,
   stripThinkSection: false,
-  codeAgentEnabled: false,
   skills: [],
 })
 
@@ -24,7 +22,6 @@ if (model) {
       models,
       attachedMessagesCount: chatDefaultSettings.value.attachedMessagesCount || DEFAULT_ATTACHED_MESSAGES_COUNT,
       stripThinkSection: false,
-      codeAgentEnabled: false,
       skills: [],
     }
   } else {
@@ -32,7 +29,6 @@ if (model) {
       models: [],
       attachedMessagesCount: DEFAULT_ATTACHED_MESSAGES_COUNT,
       stripThinkSection: false,
-      codeAgentEnabled: false,
       skills: [],
     }
   }

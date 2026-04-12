@@ -1,5 +1,3 @@
-version: '3.1'
-
 services:
   ollama:
     image: ollama/ollama
@@ -15,6 +13,9 @@ services:
             - driver: nvidia
               count: all
               capabilities: [ gpu ]
+    networks:
+      - hexagon-network
+
   chromadb:
     image: chromadb/chroma
     ports:
@@ -22,27 +23,45 @@ services:
     restart: always
     volumes:
       - chromadb_data:/chroma/.chroma/index
+    networks:
+      - hexagon-network
 
   hexagonchat:
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       - CHROMADB_URL=http://chromadb:8000
       - DATABASE_URL=file:/app/sqlite/HexagonChat.sqlite
       - REDIS_HOST=redis
-      - SECRET=${SECRET}
-    image: 0001coder/hexagon-chat:latest
+      - SECRET=${SECRET:-your-secret-key-change-in-production}
     ports:
       - "3000:3000"
-    pull_policy: always
     restart: always
     volumes:
       - ~/.hexagonchat:/app/sqlite
+    networks:
+      - hexagon-network
+    depends_on:
+      - ollama
+      - chromadb
+      - redis
 
   redis:
-    image: redis:latest
+    image: redis:6-alpine
+    ports:
+      - "6379:6379"
     restart: always
     volumes:
       - redis_data:/data
+    networks:
+      - hexagon-network
+
+networks:
+  hexagon-network:
+    driver: bridge
 
 volumes:
   chromadb_data:
   ollama_data:
+  redis_data:

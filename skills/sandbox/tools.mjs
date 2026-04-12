@@ -1,54 +1,35 @@
 export const sandboxExecuteTool = {
   name: 'sandbox_execute',
-  description: 'Execute HTML/CSS/JS code in the sandbox. The code will be rendered and you can see the results.',
+  description: `Execute HTML/CSS/JS code in the sandbox. The code will be rendered in real-time in the browser.
+  - Use this to create interactive web demos, test frontend code, and build UI prototypes
+  - Returns the code in a format that will be automatically rendered in the sandbox panel
+  - HTML: The HTML structure to render
+  - CSS: Optional CSS styles to apply
+  - JS: Optional JavaScript code to execute`,
   
   schema: {
-    html: { type: 'string', description: 'HTML code to render in the sandbox' },
-    css: { type: 'string', description: 'CSS code to style the HTML' },
-    js: { type: 'string', description: 'JavaScript code to execute' },
-    js_code: { type: 'string', description: 'Alternative field for JavaScript code' }
+    type: 'object',
+    properties: {
+      html: { type: 'string', description: 'HTML code to render in the sandbox' },
+      css: { type: 'string', description: 'CSS code to style the HTML' },
+      js: { type: 'string', description: 'JavaScript code to execute' }
+    },
+    required: ['html']
   },
   
-  async execute({ html, css, js, js_code }) {
-    const finalJs = js || js_code || ''
-    const finalHtml = html || ''
-    const finalCss = css || ''
+  async execute(input) {
+    const { html = '', css = '', js = '' } = input
     
-    console.log('Sandbox execute called with:', { html: finalHtml, css: finalCss, js: finalJs })
+    const result = {
+      success: true,
+      html,
+      css,
+      js,
+      message: `Code sent to sandbox. ${js ? 'JavaScript will execute in the browser.' : ''}`
+    }
     
-    return JSON.stringify({
-      success: true,
-      message: 'Code executed in sandbox.',
-      html: finalHtml,
-      css: finalCss,
-      code: finalJs
-    })
+    return JSON.stringify(result)
   }
 }
 
-export const sandboxGetStateTool = {
-  name: 'sandbox_get_state',
-  description: 'Get the current state of the sandbox including HTML, CSS, and JavaScript.',
-  
-  async execute({}) {
-    return JSON.stringify({
-      state: 'Use this to retrieve current sandbox code for reference',
-      note: 'State is maintained in the sandbox panel'
-    })
-  }
-}
-
-export const sandboxResetTool = {
-  name: 'sandbox_reset',
-  description: 'Reset the sandbox to empty state. Use this to start fresh.',
-  
-  async execute({}) {
-    return JSON.stringify({
-      success: true,
-      message: 'Sandbox has been reset.',
-      reset: true
-    })
-  }
-}
-
-export default [sandboxExecuteTool, sandboxGetStateTool, sandboxResetTool]
+export default [sandboxExecuteTool]
