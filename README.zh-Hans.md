@@ -154,6 +154,106 @@ $ docker compose exec ollama ollama pull nomic-embed-text:latest
 
 请参阅 [docs/proxy-usage.md](docs/proxy-usage.md)。
 
+## 部署选项
+
+### 方式一：本地开发
+
+```bash
+# 安装依赖
+pnpm install
+
+# 启动必要服务
+docker compose up -d chromadb redis
+
+# 运行数据库迁移
+pnpm prisma-migrate
+
+# 启动应用
+pnpm dev
+```
+
+访问地址：http://localhost:3000
+
+### 方式二：Docker 本地部署
+
+```bash
+# 构建并启动所有服务
+docker compose up -d
+
+# 或先构建再启动
+docker compose build
+docker compose up -d
+```
+
+访问地址：http://localhost:3000
+
+### 方式三：部署到 Linux 服务器
+
+#### A. 构建并推送到 Docker Hub（在 Mac 上操作）
+
+```bash
+# 构建镜像
+docker compose build
+
+# 登录 Docker Hub
+docker login
+
+# 标记并推送
+docker tag hexagon-chat-hexagonchat yourusername/hexagon-chat:latest
+docker tag hexagon-chat-code-runner yourusername/hexagon-chat-code-runner:latest
+docker push yourusername/hexagon-chat:latest
+docker push yourusername/hexagon-chat-code-runner:latest
+```
+
+#### B. 在 Linux 服务器上拉取并运行
+
+需要克隆整个项目（因为需要 docker-compose.yaml）：
+
+```bash
+# 安装 Docker
+curl -fsSL https://get.docker.com | sh
+
+# 克隆项目
+git clone https://github.com/liuwantao3/hexagon-chat.git
+cd hexagon-chat
+
+# 运行部署脚本
+./scripts/deploy-server.sh yourusername
+```
+
+**必需的环境变量：**
+```bash
+SECRET=your-secret-key
+NUXT_OPENAI_API_KEY=sk-xxx
+NUXT_GEMINI_API_KEY=xxx
+NUXT_MINIMAX_API_KEY=xxx
+```
+
+### 方式四：使用 ngrok 互联网访问
+
+本地运行时希望从互联网访问：
+
+```bash
+# 安装 ngrok
+brew install ngrok  # macOS
+# 或：https://ngrok.com/download
+
+# 添加认证令牌
+ngrok config add-authtoken YOUR_AUTHTOKEN
+
+# 启动 ngrok
+ngrok http 3000
+```
+
+或使用提供的脚本：
+```bash
+./scripts/start-ngrok.sh
+```
+
+**内存要求：**
+- Docker 部署：约 2GB RAM（chroma + redis + 应用）
+- 8GB 服务器足够
+
 ## 开发者指南
 
 由于 `Hexagon Chat` 处于活跃开发中，请在每次 `git pull` 时执行：
