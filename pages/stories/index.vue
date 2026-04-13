@@ -3,9 +3,15 @@ const { t } = useI18n()
 const toast = useToast()
 import { getKeysHeader, loadOllamaInstructions } from '~/utils/settings'
 import { useModels } from '~/composables/useModels'
+import { useAudioModels } from '~/composables/useAudioModels'
 import { useStorage } from '@vueuse/core'
 
 const { chatModels } = useModels()
+const { ttsOptions, imageOptions, loadModels, getVoicesByProvider, supportsEmotion } = useAudioModels()
+
+onMounted(() => {
+  loadModels()
+})
 
 const baseUrl = computed(() => {
   if (process.client) {
@@ -106,14 +112,7 @@ function hexToUint8Array(hex: string): Uint8Array {
   return bytes
 }
 
-const voiceOptions = [
-  { value: 'Chinese (Mandarin)_Lyrical_Voice', label: 'Chinese - Lyrical' },
-  { value: 'Chinese (Mandarin)_HK_Flight_Attendant', label: 'Chinese - Flight Attendant' },
-  { value: 'English_Graceful_Lady', label: 'English - Graceful Lady' },
-  { value: 'English_Insightful_Speaker', label: 'English - Insightful Speaker' },
-  { value: 'English_radiant_girl', label: 'English - Radiant Girl' },
-  { value: 'English_Persuasive_Man', label: 'English - Persuasive Man' }
-]
+// Voice options are now dynamic based on provider (see line 140)
 
 const emotionOptions = [
   { value: 'happy', label: 'Happy' },
@@ -125,10 +124,19 @@ const emotionOptions = [
   { value: 'calm', label: 'Calm' }
 ]
 
-const ttsModelOptions = [
-  { value: 'speech-2.8-hd', label: 'speech-2.8-hd (High Quality, with timestamps)' },
-  { value: 'speech-01-turbo', label: 'speech-01-turbo (Fast, no timestamps)' }
-]
+// Dynamic voice options based on provider
+const currentTtsProvider = computed(() => {
+  const modelOption = ttsOptions.value.find(m => m.value === selectedTtsModel.value)
+  return modelOption?.provider || 'minimax'
+})
+
+const voiceOptions = computed(() => getVoicesByProvider(currentTtsProvider.value))
+const showEmotion = computed(() => supportsEmotion(currentTtsProvider.value))
+
+const ttsModelOptions = computed(() => ttsOptions.value.length > 0 ? ttsOptions.value : [
+  { value: 'speech-2.8-hd', label: 'speech-2.8-hd (MiniMax)', provider: 'minimax' },
+  { value: 'gemini-2.5-flash-preview-tts', label: 'gemini-2.5-flash-preview-tts (Gemini)', provider: 'gemini' }
+])
 
 const selectedVoice = useStorage('story-voice', 'Chinese (Mandarin)_Lyrical_Voice')
 const selectedEmotion = useStorage('story-emotion', 'happy')
@@ -156,10 +164,10 @@ const aspectRatioOptions = [
   { value: '9:16', label: '9:16 (Vertical)' }
 ]
 
-const imageModelOptions = [
-  { value: 'image-01', label: 'Image-01' },
-  { value: 'image-01-live', label: 'Image-01 Live' }
-]
+const imageModelOptions = computed(() => imageOptions.value.length > 0 ? imageOptions.value : [
+  { value: 'image-01', label: 'Image-01 (MiniMax)', provider: 'minimax' },
+  { value: 'imagen-3.0-generate-002', label: 'imagen-3.0-generate-002 (Gemini)', provider: 'gemini' }
+])
 
  async function generateImage() {
   if (!generatedStory.value || !generatedStory.value.title) return
@@ -177,7 +185,8 @@ const imageModelOptions = [
     const selectedModelObj = chatModels.value.find(m => m.value === selectedModel.value)
     const modelFamily = selectedModelObj?.family
     const modelName = selectedModelObj?.name
-    console.log('[Image Generation] Selected model:', selectedModel.value, 'Family:', modelFamily, 'Name:', modelName)
+    console.log('[Image Generation] Selected chat model:', selectedModel.value, 'Family:', modelFamily, 'Name:', modelName)
+    console.log('[Image Generation] Selected image model:', selectedImageModel.value)
     
     // Check if stopped
     if (abortSignal.aborted || isImageStopping.value) return
@@ -243,23 +252,31 @@ const imageModelOptions = [
     
     console.log('[Image Generation] Final Prompt:', prompt)
     
+    // Determine provider based on selected model
+    const selectedImageModelOption = imageModelOptions.value.find(m => m.value === selectedImageModel.value)
+    const imageProvider = selectedImageModelOption?.provider || 'minimax'
+    
     const res = await $fetch<any>('/api/image/generate', {
       method: 'POST',
       body: {
         prompt,
         aspect_ratio: selectedImageAspectRatio.value,
-        model: selectedImageModel.value
+        model: selectedImageModel.value,
+        provider: imageProvider
       },
       headers: {
         'x-hexagon-chat-keys': JSON.stringify({
-          minimax: keysData.minimax
+          minimax: keysData.minimax,
+          gemini: keysData.gemini
         })
       },
       signal: abortSignal
     })
     
     const result = JSON.parse(res)
+    console.log('[Image Generation] Result:', result)
     if (result.imageUrls && result.imageUrls.length > 0) {
+      console.log('[Image Generation] Image URL:', result.imageUrls[0])
       currentImageUrl.value = result.imageUrls[0]
     } else if (result.error) {
       toast.add({ title: result.error, color: 'red' })
@@ -270,7 +287,7 @@ const imageModelOptions = [
       return
     }
     console.error('Failed to generate image:', e)
-    toast.add({ title: 'Failed to generate image. Please check MiniMax API key.', color: 'red' })
+    toast.add({ title: `Failed to generate image with ${imageProvider}. Check API key.`, color: 'red' })
   } finally {
     isGeneratingImage.value = false
     isImageStopping.value = false
@@ -325,12 +342,22 @@ async function saveImageToStory() {
     storyId = res.id
   }
 
-  if (currentImageUrl.value.startsWith('http')) {
-    await $fetch(`/api/stories/${storyId}/image`, {
-      method: 'POST',
-      body: { image_url: currentImageUrl.value },
-      headers: getKeysHeader()
-    })
+  if (currentImageUrl.value) {
+    const isDataUri = currentImageUrl.value.startsWith('data:')
+    if (isDataUri) {
+      // Save base64 data URI directly
+      await $fetch(`/api/stories/${storyId}/image`, {
+        method: 'POST',
+        body: { image_url: currentImageUrl.value },
+        headers: getKeysHeader()
+      })
+    } else if (currentImageUrl.value.startsWith('http')) {
+      await $fetch(`/api/stories/${storyId}/image`, {
+        method: 'POST',
+        body: { image_url: currentImageUrl.value },
+        headers: getKeysHeader()
+      })
+    }
   }
 
   currentImageUrl.value = null
@@ -538,16 +565,20 @@ async function generateVoice() {
   try {
     const modelToUse = selectedTtsModel.value
     
-    // speech-2.8-hd supports timestamps (async), others use sync endpoint
-    const needsTimestamps = modelToUse === 'speech-2.8-hd'
+    // Determine provider based on selected model
+    const selectedModelOption = ttsModelOptions.value.find(m => m.value === modelToUse)
+    const ttsProvider = selectedModelOption?.provider || 'minimax'
+    
+    // MiniMax speech-2.8-hd supports timestamps (async), others use sync endpoint
+    const needsTimestamps = ttsProvider === 'minimax' && modelToUse === 'speech-2.8-hd'
     const endpoint = needsTimestamps ? '/api/audio/speech_async' : '/api/audio/speech'
     
-    console.log('Using TTS:', endpoint, 'model:', modelToUse)
+    console.log('Using TTS:', endpoint, 'model:', modelToUse, 'provider:', ttsProvider)
     
     let res: any
     
     if (needsTimestamps) {
-      // Use async endpoint for timestamps
+      // Use async endpoint for timestamps (MiniMax only)
       res = await $fetch<{ audio_hex: string; sentence_timestamps: any[] }>(endpoint, {
         method: 'POST',
         body: {
@@ -562,6 +593,24 @@ async function generateVoice() {
       })
       currentAudioTimestamps.value = res.sentence_timestamps
     } else {
+      // Build request body based on provider
+      const body: any = {
+        text: generatedStory.value.content,
+        speed: selectedVoiceSpeed.value,
+        model: modelToUse,
+        format: 'mp3',
+        provider: ttsProvider
+      }
+      
+      // MiniMax-specific parameters
+      if (ttsProvider === 'minimax') {
+        body.voice_id = selectedVoice.value
+        body.emotion = selectedEmotion.value
+      } else if (ttsProvider === 'gemini') {
+        // Gemini uses voice_name instead
+        body.voice_name = selectedVoice.value
+      }
+      
       // Use sync endpoint for faster response (no timestamps)
       const audioRes = await fetch(endpoint, {
         method: 'POST',
@@ -569,14 +618,7 @@ async function generateVoice() {
           'Content-Type': 'application/json',
           ...getKeysHeader()
         },
-        body: JSON.stringify({
-          text: generatedStory.value.content,
-          voice_id: selectedVoice.value,
-          emotion: selectedEmotion.value,
-          speed: selectedVoiceSpeed.value,
-          model: modelToUse,
-          format: 'mp3'
-        })
+        body: JSON.stringify(body)
       })
       
       if (!audioRes.ok) {
@@ -592,7 +634,20 @@ async function generateVoice() {
     }
 
     const audioBuffer = hexToUint8Array(res.audio_hex)
-    const blob = new Blob([audioBuffer], { type: 'audio/mpeg' })
+    // Try to detect format from first bytes
+    let audioType = 'audio/wav' // default to wav since Gemini returns PCM/WAV
+    if (audioBuffer[0] === 0x49 && audioBuffer[1] === 0x44 && audioBuffer[2] === 0x33) {
+      audioType = 'audio/mpeg' // ID3 header
+    } else if (audioBuffer[0] === 0xFF && audioBuffer[1] === 0xFB) {
+      audioType = 'audio/mpeg' // MP3 sync
+    } else if (audioBuffer[0] === 0x52 && audioBuffer[1] === 0x49 && audioBuffer[2] === 0x46 && audioBuffer[3] === 0x46) {
+      audioType = 'audio/wav' // RIFF/WAV header
+    } else if (audioBuffer[0] === 0x66 && audioBuffer[1] === 0x74 && audioBuffer[2] === 0x79 && audioBuffer[3] === 0x70) {
+      audioType = 'audio/mp4' // ftyp
+    }
+    console.log('[Audio] Detected format:', audioType, 'first bytes:', audioBuffer.slice(0,4).join(' '))
+    
+    const blob = new Blob([audioBuffer], { type: audioType })
     if (currentAudioUrl.value) {
       URL.revokeObjectURL(currentAudioUrl.value)
     }
@@ -934,7 +989,10 @@ watch(() => chatModels.value, (newModels) => {
                   />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-500 mb-1">Emotion</label>
+                  <label class="block text-xs text-gray-500 mb-1">
+                    Emotion
+                    <span v-if="!showEmotion" class="text-xs text-gray-400">(Gemini not supported)</span>
+                  </label>
                   <USelect
                     v-model="selectedEmotion"
                     :options="emotionOptions"
@@ -942,6 +1000,7 @@ watch(() => chatModels.value, (newModels) => {
                     option-value="value"
                     size="sm"
                     class="w-full"
+                    :disabled="!showEmotion"
                   />
                 </div>
                 <div>

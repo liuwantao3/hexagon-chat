@@ -35,7 +35,7 @@ async function generateImage(prompt: string, apiKey: string, options: {
     n?: number
     model?: string
 }, endpoint?: string) {
-    const apiEndpoint = endpoint || 'https://api.minimaxi.com'
+    const apiEndpoint = endpoint || 'https://api.minimax.io'
     const response = await fetch(`${apiEndpoint}/v1/image_generation`, {
         method: 'POST',
         headers: {
@@ -75,7 +75,7 @@ export const imageTool = tool(
             })
         }
 
-        const primaryEndpoint = currentEndpoint || 'https://api.minimaxi.com'
+        const primaryEndpoint = currentEndpoint || 'https://api.minimax.io'
 
         try {
             const result = await generateImage(input.prompt, apiKey, {

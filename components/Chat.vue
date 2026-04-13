@@ -284,7 +284,7 @@ const onSend = async (data: ChatBoxFormData) => {
   let isStream: boolean = true
   if (data.image) {
     //input = [{ type: 'text', text: data.content.trim() }, { type: 'image_url', image_url: data.image }]
-    input.push({ type: 'text', text: data.content.trim() })
+    input.push({ type: 'text', text: (data.content || '').toString().trim() })
     input.push({ type: 'image_url', image_url: data.image })
     // console.log(input)
     // console.log("input type is an array?", Array.isArray(input))
@@ -293,7 +293,7 @@ const onSend = async (data: ChatBoxFormData) => {
     //isStream = false
   }
   else
-    input = data.content.trim()
+    input = (data.content || '').toString().trim()
 
   if (sendingCount.value > 0 || !input || !models.value) {
     return
@@ -444,7 +444,18 @@ async function onModelsChange(models: string[]) {
 }
 
 async function onResend(data: ChatMessage) {
-  onSend({ content: data.content })
+  // Handle both string content and array content (with images)
+  const content = data.content
+  if (Array.isArray(content)) {
+    // Find image in the original message content
+    const imagePart = content.find((c: any) => c.type === 'image_url' && c.image_url)
+    onSend({ 
+      content: content.map((c: any) => c.type === 'text' ? c.text : '').join(''),
+      image: imagePart?.image_url
+    })
+  } else {
+    onSend({ content: content })
+  }
 }
 
 async function onRemove(data: ChatMessage) {

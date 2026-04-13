@@ -1,3 +1,8 @@
+import http from 'node:http'
+import https from 'node:https'
+import { SocksProxyAgent } from 'socks-proxy-agent'
+import { HttpProxyAgent } from 'http-proxy-agent'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 import { type ModelResponse, type ModelDetails } from 'ollama'
 import { MODEL_FAMILIES, OPENAI_GPT_MODELS, ANTHROPIC_MODELS, AZURE_OPENAI_GPT_MODELS, MOONSHOT_MODELS, MINIMAX_MODELS, GEMINI_MODELS, GROQ_MODELS } from '~/config/index'
 import { getOllama } from '@/server/utils/ollama'
@@ -15,6 +20,55 @@ interface ModelApiResponse {
     description?: string
     // ... other optional fields
   }>
+}
+
+type Protocol = 'http:' | 'https:'
+
+const proxyAgentCache = new Map<string, InstanceType<typeof HttpProxyAgent> | InstanceType<typeof HttpsProxyAgent> | InstanceType<typeof SocksProxyAgent>>()
+
+function getProxyAgent(proxyUrl: string, protocol: Protocol) {
+  if (proxyAgentCache.has(proxyUrl))
+    return proxyAgentCache.get(proxyUrl)!
+
+  proxyAgentCache.clear()
+
+  const agent = proxyUrl.startsWith('http:')
+    ? protocol === 'https:' ? new HttpsProxyAgent(proxyUrl) : new HttpProxyAgent(proxyUrl)
+    : new SocksProxyAgent(proxyUrl)
+
+  proxyAgentCache.set(proxyUrl, agent)
+  return agent
+}
+
+async function fetchWithProxy(url: string, proxyUrl: string, options: RequestInit = {}): Promise<Response> {
+  const uri = new URL(url)
+  const client = uri.protocol === 'https:' ? https : http
+
+  return new Promise((resolve, reject) => {
+    const request = client.request(url, {
+      method: options.method || 'GET',
+      headers: options.headers,
+      agent: getProxyAgent(proxyUrl, uri.protocol as Protocol)
+    }, response => {
+      const chunks: Buffer[] = []
+      response.on('data', chunk => chunks.push(chunk))
+      response.on('end', () => {
+        const body = Buffer.concat(chunks)
+        const headers: Record<string, string | string[]> = {}
+        Object.entries(response.headers).forEach(([key, value]) => {
+          if (value) headers[key] = value
+        })
+        resolve(new Response(body, {
+          status: response.statusCode,
+          statusText: response.statusMessage,
+          headers
+        }))
+      })
+      response.on('error', reject)
+    })
+    request.on('error', reject)
+    request.end()
+  })
 }
 
 export default defineEventHandler(async (event) => {
@@ -77,13 +131,24 @@ export default defineEventHandler(async (event) => {
   }
 
   if (keys.anthropic?.key) {
+    const config = useRuntimeConfig()
+    const proxyUrl = config.modelProxyUrl
+
     try {
-      const response = await fetch('https://api.anthropic.com/v1/models', {
-        headers: {
-          'x-api-key': keys.anthropic.key,
-          'anthropic-version': '2023-01-01'
-        }
-      })
+      const anthropicUrl = 'https://api.anthropic.com/v1/models'
+      const response = proxyUrl
+        ? await fetchWithProxy(anthropicUrl, proxyUrl, {
+            headers: {
+              'x-api-key': keys.anthropic.key,
+              'anthropic-version': '2023-01-01'
+            }
+          })
+        : await fetch(anthropicUrl, {
+            headers: {
+              'x-api-key': keys.anthropic.key,
+              'anthropic-version': '2023-01-01'
+            }
+          })
 
       if (response.ok) {
         const data = await response.json()
@@ -114,12 +179,18 @@ export default defineEventHandler(async (event) => {
   }
 
   if (keys.moonshot?.key) {
+    const config = useRuntimeConfig()
+    const proxyUrl = config.modelProxyUrl
+
     try {
-      const response = await fetch('https://api.moonshot.cn/v1/models', {
-        headers: {
-          'Authorization': `Bearer ${keys.moonshot.key}`,
-        }
-      })
+      const moonshotUrl = 'https://api.moonshot.cn/v1/models'
+      const response = proxyUrl
+        ? await fetchWithProxy(moonshotUrl, proxyUrl, {
+            headers: { 'Authorization': `Bearer ${keys.moonshot.key}` }
+          })
+        : await fetch(moonshotUrl, {
+            headers: { 'Authorization': `Bearer ${keys.moonshot.key}` }
+          })
 
       if (response.ok) {
         const data = await response.json()
@@ -177,15 +248,26 @@ export default defineEventHandler(async (event) => {
   }
 
   if (keys.gemini?.key) {
+    const config = useRuntimeConfig()
+    const proxyUrl = config.modelProxyUrl
+    console.log('[Models] Gemini key found, proxy:', proxyUrl || 'none')
+
     try {
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + keys.gemini.key, {
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      })
+      const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models?key=' + keys.gemini.key
+      console.log('[Models] Fetching Gemini models from:', geminiUrl.substring(0, 80) + '...')
+      const response = proxyUrl
+        ? await fetchWithProxy(geminiUrl, proxyUrl, {
+            headers: { 'Content-Type': 'application/json' }
+          })
+        : await fetch(geminiUrl, {
+            headers: { 'Content-Type': 'application/json' }
+          })
+      console.log('[Models] Gemini response status:', response.status)
 
       if (response.ok) {
         const data = await response.json()
+        const count = data.models?.length || 0
+        console.log('[Models] Gemini models fetched:', count)
         data.models?.forEach((model: any) => {
           if (model.name && (model.supportedGenerationMethods?.includes('generateContent') || model.supportedGenerationMethods?.includes('streamGenerateContent'))) {
             const modelName = model.name.replace('models/', '')
@@ -197,6 +279,7 @@ export default defineEventHandler(async (event) => {
             })
           }
         })
+        console.log('[Models] Gemini chat models added:', models.filter(m => m.details?.family === MODEL_FAMILIES.gemini).length)
       }
     } catch (error) {
       console.error('Failed to fetch Gemini models:', error)
@@ -204,6 +287,7 @@ export default defineEventHandler(async (event) => {
 
     // Fallback to static models if API call fails
     if (!models.some(m => m.details?.family === MODEL_FAMILIES.gemini)) {
+      console.log('[Models] Using Gemini fallback models')
       GEMINI_MODELS.forEach((model) => {
         models.push({
           name: model,
@@ -216,12 +300,18 @@ export default defineEventHandler(async (event) => {
   }
 
   if (keys.groq?.key) {
+    const config = useRuntimeConfig()
+    const proxyUrl = config.modelProxyUrl
+
     try {
-      const response = await fetch('https://api.groq.com/openai/v1/models', {
-        headers: {
-          'Authorization': `Bearer ${keys.groq.key}`,
-        }
-      })
+      const groqUrl = 'https://api.groq.com/openai/v1/models'
+      const response = proxyUrl
+        ? await fetchWithProxy(groqUrl, proxyUrl, {
+            headers: { 'Authorization': `Bearer ${keys.groq.key}` }
+          })
+        : await fetch(groqUrl, {
+            headers: { 'Authorization': `Bearer ${keys.groq.key}` }
+          })
 
       if (response.ok) {
         const data = await response.json()

@@ -579,7 +579,15 @@ export class ChatGoogleGenerativeAI
   private client: GenerativeModel
 
   get _isMultimodalModel() {
-    return this.model.includes("vision") || this.model.startsWith("gemini-1.5")
+    // Check for vision-enabled models
+    const model = this.model.toLowerCase()
+    return (
+      model.includes("vision") ||
+      model.startsWith("gemini-1.5") ||
+      model.startsWith("gemini-2.0") ||
+      model.startsWith("gemini-2.5") ||
+      model.startsWith("gemini-3")
+    )
   }
 
   constructor(fields?: GoogleGenerativeAIChatInput) {

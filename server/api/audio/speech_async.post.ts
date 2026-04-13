@@ -34,7 +34,7 @@ async function withMiniMaxFallback<T>(
   primaryOnlyFn: (key: string, endpoint: string) => Promise<T>,
   fallbackFn: (key: string, endpoint: string) => Promise<T>
 ): Promise<T> {
-  const primaryEndpoint = keys.endpoint || 'https://api.minimaxi.com'
+  const primaryEndpoint = keys.endpoint || 'https://api.minimax.io'
   
   try {
     return await primaryOnlyFn(keys.key, primaryEndpoint)
