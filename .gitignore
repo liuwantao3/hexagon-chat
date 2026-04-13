@@ -42,3 +42,6 @@ public/audio/
 
 # Misc
 nohup.out
+public/images/stories/*.png
+public/images/stories/*.jpg
+public/images/stories/*.jpeg
