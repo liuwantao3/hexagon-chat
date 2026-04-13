@@ -154,6 +154,104 @@ Knowledge base records and files are stored in SQLite: `~/.hexagonchat/HexagonCh
 
 See [docs/proxy-usage.md](docs/proxy-usage.md).
 
+## Deployment Options
+
+### Option 1: Local Development
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start required services
+docker compose up -d chromadb redis
+
+# Run database migrations
+pnpm prisma-migrate
+
+# Start the app
+pnpm dev
+```
+
+Access at: http://localhost:3000
+
+### Option 2: Docker (Local)
+
+```bash
+# Build and start all services
+docker compose up -d
+
+# Or build first then start
+docker compose build
+docker compose up -d
+```
+
+Access at: http://localhost:3000
+
+### Option 3: Deploy to Linux Server
+
+#### A. Build & Push to Docker Hub (from your Mac)
+
+```bash
+# Build images
+docker compose build
+
+# Login to Docker Hub
+docker login
+
+# Tag and push
+docker tag hexagon-chat-hexagonchat yourusername/hexagon-chat:latest
+docker tag hexagon-chat-code-runner yourusername/hexagon-chat-code-runner:latest
+docker push yourusername/hexagon-chat:latest
+docker push yourusername/hexagon-chat-code-runner:latest
+```
+
+#### B. Pull & Run on Linux Server
+
+```bash
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+
+# Clone the project
+git clone https://github.com/liuwantao3/hexagon-chat.git
+cd hexagon-chat
+
+# Run deploy script
+./scripts/deploy-server.sh yourusername
+```
+
+**Required environment variables:**
+```bash
+SECRET=your-secret-key
+NUXT_OPENAI_API_KEY=sk-xxx
+NUXT_GEMINI_API_KEY=xxx
+NUXT_MINIMAX_API_KEY=xxx
+```
+
+### Option 4: Access from Internet (ngrok)
+
+If running locally and want to access from internet:
+
+```bash
+# Install ngrok
+brew install ngrok  # macOS
+# or: https://ngrok.com/download
+
+# Add auth token
+ngrok config add-authtoken YOUR_AUTHTOKEN
+
+# Start ngrok
+ngrok http 3000
+```
+
+Or use the provided script:
+```bash
+./scripts/start-ngrok.sh
+```
+
+**Memory Requirements:**
+- Docker deployment: ~2GB RAM (chroma + redis + app)
+- 8GB server is sufficient
+
 ## Developers Guide
 
 As Hexagon Chat is under active development, please follow these steps on every `git pull`:
