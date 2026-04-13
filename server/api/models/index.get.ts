@@ -77,25 +77,76 @@ export default defineEventHandler(async (event) => {
   }
 
   if (keys.anthropic?.key) {
-    ANTHROPIC_MODELS.forEach((model) => {
-      models.push({
-        name: model,
-        details: {
-          family: MODEL_FAMILIES.anthropic
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/models', {
+        headers: {
+          'x-api-key': keys.anthropic.key,
+          'anthropic-version': '2023-01-01'
         }
       })
-    })
+
+      if (response.ok) {
+        const data = await response.json()
+        data.data?.forEach((model: any) => {
+          models.push({
+            name: model.id,
+            details: {
+              family: MODEL_FAMILIES.anthropic
+            }
+          })
+        })
+      }
+    } catch (error) {
+      console.error('Failed to fetch Anthropic models:', error)
+    }
+
+    // Fallback to static models if API call fails
+    if (!models.some(m => m.details?.family === MODEL_FAMILIES.anthropic)) {
+      ANTHROPIC_MODELS.forEach((model) => {
+        models.push({
+          name: model,
+          details: {
+            family: MODEL_FAMILIES.anthropic
+          }
+        })
+      })
+    }
   }
 
   if (keys.moonshot?.key) {
-    MOONSHOT_MODELS.forEach((model) => {
-      models.push({
-        name: model,
-        details: {
-          family: MODEL_FAMILIES.moonshot
+    try {
+      const response = await fetch('https://api.moonshot.cn/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${keys.moonshot.key}`,
         }
       })
-    })
+
+      if (response.ok) {
+        const data = await response.json()
+        data.data?.forEach((model: any) => {
+          models.push({
+            name: model.id,
+            details: {
+              family: MODEL_FAMILIES.moonshot
+            }
+          })
+        })
+      }
+    } catch (error) {
+      console.error('Failed to fetch Moonshot models:', error)
+    }
+
+    // Fallback to static models if API call fails
+    if (!models.some(m => m.details?.family === MODEL_FAMILIES.moonshot)) {
+      MOONSHOT_MODELS.forEach((model) => {
+        models.push({
+          name: model,
+          details: {
+            family: MODEL_FAMILIES.moonshot
+          }
+        })
+      })
+    }
   }
 
   if (keys.minimax?.key) {
@@ -126,25 +177,78 @@ export default defineEventHandler(async (event) => {
   }
 
   if (keys.gemini?.key) {
-    GEMINI_MODELS.forEach((model) => {
-      models.push({
-        name: model,
-        details: {
-          family: MODEL_FAMILIES.gemini
+    try {
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + keys.gemini.key, {
+        headers: {
+          'Content-Type': 'application/json',
         }
       })
-    })
+
+      if (response.ok) {
+        const data = await response.json()
+        data.models?.forEach((model: any) => {
+          if (model.name && (model.supportedGenerationMethods?.includes('generateContent') || model.supportedGenerationMethods?.includes('streamGenerateContent'))) {
+            const modelName = model.name.replace('models/', '')
+            models.push({
+              name: modelName,
+              details: {
+                family: MODEL_FAMILIES.gemini
+              }
+            })
+          }
+        })
+      }
+    } catch (error) {
+      console.error('Failed to fetch Gemini models:', error)
+    }
+
+    // Fallback to static models if API call fails
+    if (!models.some(m => m.details?.family === MODEL_FAMILIES.gemini)) {
+      GEMINI_MODELS.forEach((model) => {
+        models.push({
+          name: model,
+          details: {
+            family: MODEL_FAMILIES.gemini
+          }
+        })
+      })
+    }
   }
 
   if (keys.groq?.key) {
-    GROQ_MODELS.forEach((model) => {
-      models.push({
-        name: model,
-        details: {
-          family: MODEL_FAMILIES.groq
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${keys.groq.key}`,
         }
       })
-    })
+
+      if (response.ok) {
+        const data = await response.json()
+        data.data?.forEach((model: any) => {
+          models.push({
+            name: model.id,
+            details: {
+              family: MODEL_FAMILIES.groq
+            }
+          })
+        })
+      }
+    } catch (error) {
+      console.error('Failed to fetch Groq models:', error)
+    }
+
+    // Fallback to static models if API call fails
+    if (!models.some(m => m.details?.family === MODEL_FAMILIES.groq)) {
+      GROQ_MODELS.forEach((model) => {
+        models.push({
+          name: model,
+          details: {
+            family: MODEL_FAMILIES.groq
+          }
+        })
+      })
+    }
   }
 
   if (Array.isArray(keys.custom)) {
