@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import type { ChatMessage } from '~/types/chat'
 import { useKatexClient } from '~/composables/useKatexClient'
-import SvgViewer from '~/components/SvgViewer.vue'
+import ToolCallItem from '~/components/ToolCallItem.vue'
+import ToolCallIndicator from '~/components/ToolCallIndicator.vue'
 
 const props = defineProps<{
   message: ChatMessage
@@ -26,20 +27,18 @@ const renderContent = computed(() => {
   const content = toRaw(props.message.content)
 
   if (Array.isArray(content)) {
-    // If content is an array, process each object separately
-    return content.map(item => {
-      if (item.type === 'text') {
-        return { ...item, text: item.text.replace(regex, '') }
-      }
-      return item // Return image objects unchanged
-    })
+    // Extract text parts from array and join them
+    return content
+      .filter(item => item.type === 'text')
+      .map(item => item.text.replace(regex, ''))
+      .join('')
   } else if (typeof content === 'string') {
     // If content is a string, apply the regex directly
     return content.replace(regex, '')
   }
 
-  // Fallback for unsupported types
-  return content
+  // Fallback for unsupported types - convert to string
+  return String(content ?? '')
 })
 
 const opened = ref(props.showToggleButton === true ? false : true)
@@ -165,63 +164,13 @@ const pptTotalSlides = computed(() => {
         <div v-if="contentDisplay === 'loading'" class="text-xl text-primary p-3">
           <span class="block i-svg-spinners-3-dots-scale"></span>
         </div>
-        <template v-else-if="isModelMessage">
-          <!-- Tool Result Display -->
-          <div v-if="isToolResult" class="p-3 overflow-hidden bg-yellow-50 dark:bg-yellow-900/30 border-l-4 border-yellow-500">
-            <div class="text-xs text-yellow-600 dark:text-yellow-400 font-semibold mb-1 flex items-center">
-              <UIcon name="i-heroicons-beaker" class="mr-1" />
-              Tool Result
-            </div>
-            <!-- SVG Display -->
-            <SvgViewer v-if="isSvgToolResult" :svg-code="svgCode" />
-            <!-- Image Display -->
-            <div v-else-if="isImageToolResult" class="flex flex-wrap gap-2 mt-2">
-              <img 
-                v-for="(url, index) in imageUrls" 
-                :key="index"
-                :src="url" 
-                :alt="`Generated image ${index + 1}`"
-                class="max-w-full h-auto rounded-lg shadow-md"
-              />
-            </div>
-            <!-- PPT Preview Display -->
-            <div v-else-if="isPptPreviewResult" class="mt-2">
-              <div class="flex items-center justify-between bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 rounded-lg p-3 border border-blue-200 dark:border-blue-700">
-                <div class="flex items-center gap-3">
-                  <div class="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
-                    <span class="text-white font-bold text-lg">{{ pptTotalSlides }}</span>
-                  </div>
-                  <div>
-                    <p class="text-sm font-medium text-blue-700 dark:text-blue-300">Presentation Ready</p>
-                    <p class="text-xs text-blue-500 dark:text-blue-400">{{ pptPreviews.length }} slides previewed</p>
-                  </div>
-                </div>
-                <button 
-                  class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-                  @click="emit('openPptPreview', pptPreviews, pptTotalSlides)"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  Preview
-                </button>
-              </div>
-            </div>
-            <!-- Error Display -->
-            <div v-else-if="imageError" class="text-red-500 text-xs">
-              {{ imageError }}
-            </div>
-            <!-- Normal Tool Result -->
-            <div v-else v-html="markdown.render(toolResultMarkdown)" class="md-body text-xs font-mono"></div>
-          </div>
+        <template v-else>
+          <!-- Tool Result Display - shows for messages marked as tool result OR with toolName -->
+          <ToolCallItem v-if="isToolResult || message.toolName" :message="message" />
           <!-- Normal Message Display -->
           <div v-else class="p-3 overflow-hidden">
             <div :class="{ 'line-clamp-3 max-h-[5rem]': !opened }">
-              <!-- Handle string case -->
-              <div v-html="markdown.render(renderContent || '')" class="md-body"></div>
-
-              <!-- Handle array of objects case -->
+              <div v-html="markdown.render(String(renderContent))" class="md-body"></div>
             </div>
             <Sources v-show="opened" :relevant_documents="message?.relevantDocs || []" />
           </div>
@@ -229,17 +178,6 @@ const pptTotalSlides = computed(() => {
             <MessageToggleCollapseButton v-if="showToggleButton" :opened="opened" @click="opened = !opened" />
           </div>
         </template>
-        <template v-else-if="Array.isArray(renderContent)">
-          <div v-for="(item, index) in renderContent" :key="index">
-            <template v-if="item.type === 'text'">
-              <div v-html="markdown.render(item.text || '')" class="md-body"></div>
-            </template>
-            <template v-else-if="item.type === 'image_url'">
-              <img :src="item.image_url" class="max-w-full h-auto" />
-            </template>
-          </div>
-        </template>
-        <pre v-else v-text="message.content" class="p-3 whitespace-break-spaces" />
       </div>
       <ChatMessageActionMore :message="message"
                              :disabled="sending"

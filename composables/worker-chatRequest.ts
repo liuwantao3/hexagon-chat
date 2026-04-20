@@ -138,17 +138,36 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
         }
         const isMessage = !('type' in chatMessage) && 'message' in chatMessage
         const isToolResult = isMessage && chatMessage.message.toolResult === true
+        
+        // Handle flow_complete event from multi-tool loop
+        if ('type' in chatMessage && chatMessage.type === 'flow_complete') {
+          console.log('[Worker] Flow complete, sending complete event')
+          sendMessageToMain({ id, uid, sessionId: data.sessionId, type: 'complete' })
+          break
+        }
 
         if (isMessage) {
+          console.log('[Worker] Message received, isToolResult:', isToolResult, 'toolCalls:', chatMessage.message.toolCalls?.length || 0, 'content length:', chatMessage.message.content?.length)
+          
           if (isToolResult) {
+            // Tool result - store separately with its content
             msgContent = chatMessage.message.content
+            console.log('[Worker] Tool result stored, toolName:', chatMessage.message.toolName)
           } else {
-            msgContent += chatMessage.message.content
+            // Assistant message - if first in stream, use as-is. If continuing, append.
+            // BUT we also need to track that we have a NEW message
+            if (id === -1) {
+              msgContent = chatMessage.message.content
+            } else {
+              // This is a new assistant message after a tool result
+              msgContent = chatMessage.message.content
+            }
+            console.log('[Worker] Assistant message stored, toolCalls:', chatMessage.message.toolCalls?.length || 0)
           }
         }
 
         const result: ChatHistory = {
-          role: 'assistant' as const,
+          role: isToolResult ? 'user' as const : 'assistant' as const,
           model: data.model,
           sessionId: data.sessionId,
           message: msgContent,
@@ -158,18 +177,39 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
           endTime: Date.now(),
           toolResult: isToolResult,
           toolCallId: isToolResult ? chatMessage.message.toolCallId : undefined,
+          toolName: isToolResult ? chatMessage.message.toolName : undefined,
+          toolInput: isToolResult ? chatMessage.message.toolInput : undefined,
+          toolOutput: isToolResult ? chatMessage.message.toolOutput : undefined,
+          toolCalls: chatMessage.message.toolCalls,
         }
 
-        if (id === -1 || isToolResult) {
+        // Create new record for tool results OR new iteration responses
+        // For tool results: always create new record
+        // For non-tool responses: check if there are tool calls (indicates new iteration)
+        const isNewIteration = chatMessage.message.toolCalls?.length > 0
+        const shouldCreateNew = isToolResult || isNewIteration
+        
+        if (id === -1 || shouldCreateNew) {
+          console.log('[Worker] Creating new message, isToolResult:', isToolResult, 'isNewIteration:', isNewIteration)
           id = await addToDB(result)
+        } else {
+          // Update existing record for incremental content
+          console.log('[Worker] Updating existing message, id:', id)
+          if (isMessage && Date.now() - t > 1000) {
+            t = Date.now()
+            updateToDB({ id, message: msgContent })
+          }
         }
-        // save message to DB after every 1s
-        else if (isMessage && Date.now() - t > 1000) {
-          t = Date.now()
-          updateToDB({ id, message: msgContent })
+        
+        // After tool result, reset id to -1 so next iteration creates new record
+        if (isToolResult) {
+          console.log('[Worker] Tool result processed, resetting id for next iteration')
+          id = -1
         }
 
         if (isMessage) {
+          const toolCalls = chatMessage.message.toolCalls
+          const contentRole = isToolResult ? 'user' : 'assistant'
           sendMessageToMain({
             uid, type: 'message', sessionId: data.sessionId, id,
             data: {
@@ -177,10 +217,14 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
               content: msgContent,
               startTime: data.timestamp,
               endTime: Date.now(),
-              role: 'assistant',
+              role: contentRole,
               model: data.model,
               toolResult: isToolResult,
               toolCallId: isToolResult ? chatMessage.message.toolCallId : undefined,
+              toolName: isToolResult ? chatMessage.message.toolName : undefined,
+              toolInput: isToolResult ? chatMessage.message.toolInput : undefined,
+              toolOutput: isToolResult ? chatMessage.message.toolOutput : undefined,
+              toolCalls: toolCalls,
             }
           })
         } else if (chatMessage.type === 'relevant_documents') {

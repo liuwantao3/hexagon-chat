@@ -270,24 +270,39 @@ export default defineEventHandler(async (event) => {
             let skillSystemPrompt = ''
             const effectiveSkills = skills || []
             
+            console.log('[Chat] effectiveSkills:', effectiveSkills)
+            
             if (effectiveSkills?.length) {
                 await skillLoader.loadAll(true)
                 skillTools = skillLoader.getAllTools(effectiveSkills)
                 skillSystemPrompt = skillLoader.getSystemPrompt(effectiveSkills)
+                
+                console.log('[Chat] Loaded tools for skills:', effectiveSkills, 'tool count:', skillTools.length)
+                console.log('[Chat] Tool names:', skillTools.map(t => t.name))
                 
                 if (event.context.skillConfigs) {
                     setSkillConfigs(event.context.skillConfigs)
                 }
             }
 
-            // Load MCP tools when skills are selected
-            const normalizedTools = effectiveSkills?.length ? await mcpService.listTools() : []
+            // Load tools based on selected skills only
+            const mcpSkills = ['pptx-maker']
+            const selectedMcpSkills = effectiveSkills?.length 
+                ? effectiveSkills.filter(s => mcpSkills.includes(s)) 
+                : []
+            const normalizedTools = selectedMcpSkills.length > 0 ? await mcpService.listTools() : []
 
-            // Combine tools - svg/image tools available when code-runner skill is selected
-            const hasCodeRunner = effectiveSkills.includes('code-runner')
+            // Combine tools - only selected skills get their tools
+            const hasCodeRunner = effectiveSkills?.includes('code-runner')
+            const hasWebResearcher = effectiveSkills?.includes('web-researcher')
             const toolsToUse = effectiveSkills?.length
                 ? [...(hasCodeRunner ? svgTools : []), ...(hasCodeRunner ? imageTools : []), ...normalizedTools, ...skillTools]
                 : []
+            
+            console.log('[Chat] Selected skills:', effectiveSkills)
+            console.log('[Chat] MCP tools loaded for:', selectedMcpSkills, 'count:', normalizedTools.length)
+            console.log('[Chat] Skill tools loaded:', skillTools.map(t => t.name))
+            console.log('[Chat] Total tools for model:', toolsToUse.map(t => t.name))
             const toolsMap = toolsToUse.reduce((acc, t) => {
                 acc[t.name] = t
                 return acc
@@ -370,83 +385,161 @@ Available tools: ${toolDescriptions}`
                         }
                     }
 
-                    // Simple streaming with error handling
+                    // Streaming with continuous tool calls
                     try {
-                        const transformedMessages = finalMessages.map((message: RequestBody['messages'][number]) => {
-                            let content: string | any[] = message.content
-                            if (Array.isArray(message.content)) {
-                                try {
-                                    content = transformImageContent(message.content, family)
-                                } catch (error) {
-                                    console.log("Error parsing array content:", message.content, error)
-                                }
-                            }
-                            return [message.role, content]
-                        })
+                        console.log('[Chat] Starting stream for model:', family, 'with', toolsToUse.length, 'tools')
 
-                        console.log('[Chat] Starting stream for model:', family, 'with', toolsToUse.length, 'tools (toUse)')
-
-                        const response = await Promise.race([
-                            llm.stream(transformedMessages),
-                            new Promise((_, reject) => 
-                                setTimeout(() => reject(new Error('Stream timeout after 180 seconds')), 180000)
-                            )
-                        ])
-
-                        console.log('[Chat] Stream response received:', !!response)
-
-                        // Transform AIMessageChunk to string for Readable.from
                         const readableStream = Readable.from(
                             (async function* () {
-                                let gathered: any = null
-                                for await (const chunk of response) {
-                                    gathered = gathered ? concat(gathered, chunk) : chunk
-                                    let content = chunk?.content
-                                    if (Array.isArray(content)) {
-                                        content = content
-                                            .filter((item: any) => item.type === 'text_delta')
-                                            .map((item: any) => item.text)
-                                            .join('')
+                                let iteration = 0
+                                const maxIterations = 10
+                                let currentMessages = [...finalMessages]
+                                let shouldContinue = true
+                                let finalContent: string = ''  // Track content from last iteration
+                                
+                                while (shouldContinue && iteration < maxIterations) {
+                                    iteration++
+                                    console.log(`[Chat] Iteration ${iteration}, messages count:`, currentMessages.length)
+                                    
+                                    // Initialize assistantContent for this iteration
+                                    let assistantContent: string = ''
+                                    
+                                    const transformedMessages = currentMessages.map((message: RequestBody['messages'][number]) => {
+                                        let content: string | any[] = message.content
+                                        if (Array.isArray(message.content)) {
+                                            try {
+                                                content = transformImageContent(message.content, family)
+                                            } catch (error) {
+                                                console.log("Error parsing array content:", message.content, error)
+                                            }
+                                        }
+                                        return [message.role, content]
+                                    })
+
+                                    const response = await Promise.race([
+                                        llm.stream(transformedMessages),
+                                        new Promise((_, reject) => 
+                                            setTimeout(() => reject(new Error('Stream timeout after 180 seconds')), 180000)
+                                        )
+                                    ])
+
+                                    console.log('[Chat] Stream response received, iteration:', iteration)
+
+                                    let gathered: any = null
+                                    
+                                    // Accumulate all chunks first
+                                    for await (const chunk of response) {
+                                        gathered = gathered ? concat(gathered, chunk) : chunk
+                                        let content = chunk?.content
+                                        if (Array.isArray(content)) {
+                                            content = content
+                                                .filter((item: any) => item.type === 'text_delta')
+                                                .map((item: any) => item.text)
+                                                .join('')
+                                        }
+                                        assistantContent = (assistantContent || '') + (content || '')
                                     }
-                                    const message = {
+
+                                    // Only yield the COMPLETE assistant message after all chunks
+                                    const toolCalls = gathered?.tool_calls ?? []
+                                    
+                                    // Ensure assistantContent is always a string
+                                    finalContent = String(assistantContent || '')
+                                    
+                                    console.log('[Chat] Assistant content:', finalContent.substring(0, 100), 'toolCalls:', toolCalls.length)
+                                    
+                                    // Include tool call info if there are tool calls
+                                    const completeMessage = {
                                         message: {
                                             role: 'assistant',
-                                            content: content,
+                                            content: finalContent,
+                                            toolCalls: toolCalls.length > 0 ? toolCalls.map(tc => ({ name: tc.name, args: tc.args })) : undefined,
                                         },
                                     }
-                                    yield `${JSON.stringify(message)} \n\n`
-                                }
+                                    yield `${JSON.stringify(completeMessage)} \n\n`
 
-                                    const toolCalls = gathered?.tool_calls ?? []
-                                    if (toolCalls.length > 0) {
-                                        console.log(`[CodeAgent] Executing ${toolCalls.length} tool call(s)`)
-                                        const keys = event.context.keys
-                                        if (keys?.minimax) {
-                                            setImageToolKeys(keys.minimax.key, keys.minimax.endpoint, keys.minimax.secondary)
-                                        }
+                                    // If no tool calls, we're done - loop will exit after this
+                                    if (!toolCalls || toolCalls.length === 0) {
+                                        console.log('[Chat] No more tool calls, ending loop')
+                                        shouldContinue = false
+                                        // Don't break yet - let the loop naturally end so we get a proper exit
+                                        break
                                     }
 
+                                    console.log(`[Chat] Executing ${toolCalls.length} tool call(s):`, toolCalls.map(tc => tc.name))
+                                    const keys = event.context.keys
+                                    if (keys?.minimax) {
+                                        setImageToolKeys(keys.minimax.key, keys.minimax.endpoint, keys.minimax.secondary)
+                                    }
+
+                                    // Execute tool calls and collect results
+                                    const toolResults: Array<{name: string, content: string, toolCallId: string, args: any}> = []
+                                    
                                     for (const toolCall of toolCalls) {
                                         console.log('Tool call: ', toolCall)
                                         const selectedTool = toolsMap[toolCall.name]
                                         if (selectedTool) {
                                             const result = await selectedTool.invoke(toolCall)
-                                            const message = {
+                                            toolResults.push({
+                                                name: toolCall.name,
+                                                content: result.content,
+                                                toolCallId: result.tool_call_id,
+                                                args: toolCall.args,
+                                            })
+                                            
+                                            // Yield tool result message
+                                            const toolMessage = {
                                                 message: {
                                                     role: 'user',
                                                     toolResult: true,
                                                     toolCallId: result.tool_call_id,
+                                                    toolName: toolCall.name,
+                                                    toolInput: toolCall.args,
+                                                    toolOutput: result.content,
                                                     content: result.content,
                                                 },
                                             }
-                                            yield `${JSON.stringify(message)} \n\n`
+                                            yield `${JSON.stringify(toolMessage)} \n\n`
                                         }
                                     }
+
+                                    // Add assistant message and tool results to continue conversation
+                                    currentMessages = [
+                                        ...currentMessages,
+                                        { role: 'assistant', content: finalContent },
+                                        ...toolResults.map(tr => ({
+                                            role: 'user',
+                                            toolResult: true,
+                                            toolCallId: tr.toolCallId,
+                                            toolName: tr.name,
+                                            toolInput: tr.args,
+                                            toolOutput: tr.content,
+                                            content: tr.content,
+                                        })),
+                                    ]
+                                    
+                                    console.log(`[Chat] Added ${toolResults.length} tool results, continuing with ${currentMessages.length} messages`)
+                                }
+                                
+                                if (iteration >= maxIterations) {
+                                    console.log('[Chat] Reached max iterations, ending loop')
+                                }
+                                
+                                if (!shouldContinue) {
+                                    // Use finalContent which was set in the last iteration
+                                    const contentForLog = typeof finalContent !== 'undefined' 
+                                        ? finalContent.substring(0, 200) 
+                                        : '(no content)'
+                                    console.log('[Chat] EXITING LOOP - iteration:', iteration, 'content:', contentForLog)
+                                    // Send a completion signal by yielding a special message
+                                    yield `${JSON.stringify({ type: 'flow_complete' })} \n\n`
+                                }
                             })()
                         )
                         return sendStream(event, readableStream)
                     } catch (e: any) {
-                        console.log('[Chat] Stream error:', e.message)
+                        console.log('[Chat] Stream error:', e.message, e.stack)
+                        // Send error event
                         throw e
                     }
                 } catch (error: any) {

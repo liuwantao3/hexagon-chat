@@ -259,17 +259,23 @@ async function loadChatHistory(sessionId?: number) {
     //   .sortBy('id')
 
     return res.slice(-limitHistorySize.value).map(el => {
+      // Infer role from toolResult flag for records that don't have proper role
+      const inferredRole = el.toolResult === true ? 'user' : (el.role || 'assistant')
       return {
         id: el.id,
         content: el.message,
-        role: el.role,
+        role: inferredRole,
         model: el.model,
         startTime: el.startTime || 0,
         endTime: el.endTime || 0,
         type: el.canceled ? 'canceled' : (el.failed ? 'error' : undefined),
         relevantDocs: el.relevantDocs,
         toolResult: el.toolResult,
-        toolCallId: el.toolCallId
+        toolCallId: el.toolCallId,
+        toolName: el.toolName,
+        toolInput: el.toolInput,
+        toolOutput: el.toolOutput,
+        toolCalls: el.toolCalls,
       } as const
     })
   }
@@ -363,18 +369,24 @@ onReceivedMessage(data => {
 
   switch (data.type) {
     case 'error':
+      console.log('[Chat] Error received')
       updateMessage(data, { id: data.id, content: data.message, type: 'error' })
       break
     case 'message':
+      console.log('[Chat] Message received from worker, role:', data.data?.role, 'toolName:', data.data?.toolName)
+      // Only increment if this is the first message (streaming starting)
       if (sendingCount.value === 0) sendingCount.value += 1
       updateMessage(data, { type: undefined, ...data.data })
       
-      // Check if this is a tool result
       const isToolResult = data.data?.toolResult === true
       const toolCallId = data.data?.toolCallId
+      const toolName = data.data?.toolName
+      const toolInput = data.data?.toolInput
+      const toolOutput = data.data?.toolOutput
+      const toolCalls = data.data?.toolCalls
       const msgContent = data.data?.content || data.data?.message?.content || ''
       
-      console.log('[Chat] Message received, isToolResult:', isToolResult, 'toolCallId:', toolCallId, 'content length:', msgContent?.length)
+      console.log('[Chat] Message received, isToolResult:', isToolResult, 'toolCallId:', toolCallId, 'toolName:', toolName, 'toolCalls:', toolCalls?.length, 'content length:', msgContent?.length)
       
       if (msgContent) {
         handleSandboxCode(msgContent, isToolResult)
@@ -383,8 +395,14 @@ onReceivedMessage(data => {
     case 'relevant_documents':
       updateMessage(data, { type: undefined, ...data.data })
       break
+    case 'flow_complete':
+      console.log('[Chat] Flow complete signal received')
+      // Don't decrement here - we rely on 'complete' event
+      break
     case 'complete':
-      sendingCount.value -= 1
+      console.log('[Chat] Received complete event, current sendingCount:', sendingCount.value)
+      sendingCount.value = Math.max(0, sendingCount.value - 1)
+      console.log('[Chat] After decrement:', sendingCount.value)
       break
     case 'abort':
       updateMessage(data, { type: 'canceled' })
@@ -404,8 +422,10 @@ onMounted(async () => {
 function updateMessage(data: WorkerSendMessage, newData: Partial<ChatMessage>) {
   const index = 'id' in data ? messages.value.findIndex(el => el.id === data.uid || el.id === data.id) : -1
   if (index > -1) {
+    console.log('[Chat] updateMessage - updating existing, id:', data.id, 'index:', index)
     messages.value.splice(index, 1, { ...messages.value[index], ...newData })
   } else {
+    console.log('[Chat] updateMessage - pushing new, id:', data.id, 'role:', newData.role)
     messages.value.push(newData as ChatMessage)
   }
 }

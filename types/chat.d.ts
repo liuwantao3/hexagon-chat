@@ -9,6 +9,10 @@ export interface ChatMessage {
   relevantDocs?: RelevantDocument[]
   toolResult: boolean
   toolCallId?: string
+  toolName?: string
+  toolInput?: any
+  toolOutput?: string
+  toolCalls?: Array<{ name: string, args: any }>
 }
 
 interface TextContent {
