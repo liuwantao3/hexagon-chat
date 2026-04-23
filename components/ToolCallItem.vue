@@ -5,11 +5,21 @@ const props = defineProps<{
   message: ChatMessage
 }>()
 
+console.log('[ToolCallItem] message received:', {
+  toolResult: props.message.toolResult,
+  toolName: props.message.toolName,
+  toolOutput: props.message.toolOutput?.substring?.(0, 100),
+  content: props.message.content?.substring?.(0, 100),
+  hasImageUrls: props.message.toolOutput?.includes('imageUrls')
+})
+
 const markdown = useMarkdown()
 
 const toolIconMap: Record<string, string> = {
   bash: '$',
   shell: '$',
+  confirm: '?',
+  summarize: '📝',
   write: '←',
   read: '📄',
   glob: '✱',
@@ -66,10 +76,16 @@ const isError = computed(() => {
 })
 
 const parsedContent = computed(() => {
-  const content = props.message.toolOutput || ''
+  const content = props.message.toolOutput || props.message.content || ''
+  console.log('[ToolCallItem] raw toolOutput:', content.substring(0, 200))
+  console.log('[ToolCallItem] has content field:', !!props.message.content)
   try {
-    return JSON.parse(content)
-  } catch {
+    const parsed = JSON.parse(content)
+    console.log('[ToolCallItem] parsed JSON keys:', Object.keys(parsed))
+    console.log('[ToolCallItem] imageUrls:', parsed.imageUrls?.length)
+    return parsed
+  } catch (e) {
+    console.log('[ToolCallItem] JSON parse error:', e)
     return null
   }
 })
@@ -86,9 +102,47 @@ const isPptPreviewResult = computed(() => {
   return parsedContent.value?.previews && parsedContent.value.previews.length > 0
 })
 
+const isHtmlToolResult = computed(() => {
+  return parsedContent.value?.htmlUrls && parsedContent.value.htmlUrls.length > 0
+})
+
+const isConfirmToolResult = computed(() => {
+  return parsedContent.value?.confirm === true
+})
+
+const isAlreadyConfirmed = computed(() => {
+  return parsedContent.value?.confirmed === true
+})
+
+const confirmId = computed(() => {
+  return parsedContent.value?.confirmId || null
+})
+
+const confirmAction = computed(() => {
+  return parsedContent.value?.action || ''
+})
+
+const isSummarizeToolResult = computed(() => {
+  return parsedContent.value?.summarize === true
+})
+
 const imageError = computed(() => {
   return parsedContent.value?.error
 })
+
+// Handle confirmation response
+async function respondToConfirm(response: 'confirmed' | 'denied') {
+  console.log('[ToolCallItem] Responding to confirm:', confirmId.value, response)
+  try {
+    await $fetch('/api/confirm/respond', {
+      method: 'POST',
+      body: { confirmId: confirmId.value, response }
+    })
+    // Update the UI to show the response
+  } catch (e) {
+    console.error('[ToolCallItem] Error responding to confirm:', e)
+  }
+}
 </script>
 
 <template>
@@ -114,6 +168,16 @@ const imageError = computed(() => {
           />
         </div>
         
+        <div v-else-if="isHtmlToolResult" class="mt-2">
+          <iframe 
+            v-for="(url, index) in parsedContent.htmlUrls" 
+            :key="index"
+            :src="url"
+            class="w-full h-96 rounded-lg border border-gray-300 dark:border-gray-600"
+            sandbox="allow-scripts"
+          />
+        </div>
+        
         <div v-else-if="isPptPreviewResult" class="mt-2">
           <div class="flex items-center justify-between bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 rounded-lg p-3 border border-blue-200 dark:border-blue-700">
             <div class="flex items-center gap-3">
@@ -124,6 +188,52 @@ const imageError = computed(() => {
                 <p class="text-sm font-medium text-blue-700 dark:text-blue-300">Presentation Ready</p>
                 <p class="text-xs text-blue-500 dark:text-blue-400">{{ parsedContent.previews.length }} slides</p>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="isConfirmToolResult" class="mt-2 p-3 rounded-lg border"
+          :class="isAlreadyConfirmed ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700' : 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-700'">
+          <div class="flex items-start gap-3">
+            <UIcon :name="isAlreadyConfirmed ? 'i-heroicons-check-circle' : 'i-heroicons-exclamation-triangle'" 
+                   class="mt-0.5" 
+                   :class="isAlreadyConfirmed ? 'text-green-500' : 'text-yellow-500'" />
+            <div class="flex-1">
+              <p class="font-medium" :class="isAlreadyConfirmed ? 'text-green-800 dark:text-green-200' : 'text-yellow-800 dark:text-yellow-200'">
+                {{ isAlreadyConfirmed ? 'Confirmed' : confirmAction }}
+              </p>
+              <p class="text-sm mt-1" :class="isAlreadyConfirmed ? 'text-green-700 dark:text-green-300' : 'text-yellow-700 dark:text-yellow-300'">
+                {{ isAlreadyConfirmed ? parsedContent.message : parsedContent.message }}
+              </p>
+              <p v-if="parsedContent.details && !isAlreadyConfirmed" class="text-xs mt-2 text-yellow-600 dark:text-yellow-400">{{ parsedContent.details }}</p>
+              <div v-if="!isAlreadyConfirmed" class="flex gap-2 mt-3">
+                <UButton size="sm" color="red" variant="outline" @click="respondToConfirm('denied')">Deny</UButton>
+                <UButton size="sm" color="green" @click="respondToConfirm('confirmed')">Confirm</UButton>
+              </div>
+              <p v-else class="text-xs mt-2 text-green-600 dark:text-green-400">
+                ✓ You confirmed this action. The assistant can now proceed.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="isSummarizeToolResult" class="mt-2 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+          <div class="flex items-start gap-3">
+            <UIcon name="i-heroicons-document-text" class="text-blue-500 mt-0.5" />
+            <div class="flex-1">
+              <p class="font-medium text-blue-800 dark:text-blue-200">Summary Requested</p>
+              <p class="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                {{ parsedContent.format === 'brief' ? 'Generating brief summary...' : 'Generating comprehensive summary with:' }}
+              </p>
+              <ul v-if="parsedContent.format === 'detailed'" class="text-xs text-blue-600 dark:text-blue-400 mt-2 list-disc list-inside">
+                <li>Goal - What the user is trying to accomplish</li>
+                <li>Instructions - Important instructions given</li>
+                <li>Discoveries - Notable things learned</li>
+                <li>Accomplished - Work completed</li>
+                <li>Relevant Files/Directories</li>
+                <li>Pending Tasks</li>
+              </ul>
+              <p class="text-xs text-blue-500 dark:text-blue-400 mt-2">{{ parsedContent.note }}</p>
             </div>
           </div>
         </div>

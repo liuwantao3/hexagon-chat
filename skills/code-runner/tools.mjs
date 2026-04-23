@@ -2,21 +2,22 @@ const CODE_RUNNER_URL = process.env.CODE_RUNNER_URL || 'http://localhost:8080'
 
 console.log('[CodeRunner Skill] CODE_RUNNER_URL:', CODE_RUNNER_URL)
 
-export const executeCodeTool = {
-  name: 'execute_code',
+export const executeCodeInDockerTool = {
+  name: 'execute_code_in_docker',
   description: `Execute code in a secure Docker-based sandbox. Supports bash, Python, and Node.js.
 - Each execution runs in an isolated container with network access
 - Memory limit: 256MB, CPU limit: 1 core
 - Default timeout: 30 seconds (max 60 seconds)
 - For Python/Node packages: use bash to run 'pip install' or 'npm install' first
-- Returns stdout/stderr output and execution time`,
+- Returns stdout/stderr output and execution time
+- Note: This runs in Docker, so filesystem is the container's, not the host's`,
 
   schema: {
     type: 'object',
     properties: {
       code: {
         type: 'string',
-        description: 'The code to execute'
+        description: 'The code or command to execute'
       },
       language: {
         type: 'string',
@@ -98,4 +99,4 @@ export const executeCodeTool = {
   }
 }
 
-export default [executeCodeTool]
+export default [executeCodeInDockerTool]

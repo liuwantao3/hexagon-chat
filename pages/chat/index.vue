@@ -107,14 +107,16 @@ provide('isSessionListVisible', isSessionListVisible)
                 <UButton icon="i-material-symbols-add" color="primary" square @click="onNewChat">
                     {{ t('chat.newChat') }}
                 </UButton>
-                <UButton v-if="sandbox.isEnabled.value" icon="i-heroicons-code-bracket" variant="outline" @click="sandbox.openPanel()">
-                    Open Sandbox
-                </UButton>
+                <div v-if="sandbox.isEnabled.value && sandbox.isPanel">
+                  <UButton icon="i-heroicons-code-bracket" variant="outline" @click="sandbox.openPanel()">
+                      Open Sandbox
+                  </UButton>
+                </div>
             </div>
         </div>
         <ClientOnly>
             <SandboxPanel 
-                v-if="sandbox.isEnabled.value" 
+                v-if="sandbox.isEnabled.value && sandbox.isPanel" 
                 :class="sandbox.isOpen.value ? 'sandbox-panel' : 'sandbox-panel-hidden'" 
             />
         </ClientOnly>

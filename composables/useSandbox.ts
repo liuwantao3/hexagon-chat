@@ -16,6 +16,7 @@ const STORAGE_KEY = 'sandbox-state'
 
 export const useSandbox = () => {
   const sandboxEnabled = useStorage<boolean>('sandboxEnabled', false)
+  const sandboxMode = useStorage<'inline' | 'panel'>('sandboxMode', 'inline')
   const autoScreenshot = useStorage<boolean>('autoScreenshot', true)
   const includeConsole = useStorage<boolean>('includeConsole', true)
   const visionModel = useStorage<string>('visionModel', '')
@@ -34,6 +35,8 @@ export const useSandbox = () => {
   const isLoading = ref(false)
 
   const isEnabled = computed(() => sandboxEnabled.value)
+  const isInline = computed(() => sandboxMode.value === 'inline')
+  const isPanel = computed(() => sandboxMode.value === 'panel')
   const isAutoScreenshot = computed(() => autoScreenshot.value)
   const isIncludeConsole = computed(() => includeConsole.value)
   const isOpen = computed(() => isPanelOpen.value)
@@ -73,19 +76,22 @@ export const useSandbox = () => {
     
 
     
-    if (processedHtml) state.value.html = processedHtml
+if (processedHtml) state.value.html = processedHtml
     if (cssCode) state.value.css = cssCode
     if (processedJs) state.value.js = processedJs
     
-
-    
-    // Open panel
-    isPanelOpen.value = true
+    // Only open panel in panel mode, not in inline mode
+    // In inline mode, HTML is displayed in chat via ToolCallItem
+    if (sandboxMode.value === 'panel') {
+      isPanelOpen.value = true
+    }
     
     // Use requestAnimationFrame for more reliable rendering
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        render()
+        if (sandboxMode.value === 'panel') {
+          render()
+        }
       })
     })
   }
@@ -347,6 +353,7 @@ export const useSandbox = () => {
 
   return {
     sandboxEnabled,
+    sandboxMode,
     autoScreenshot,
     includeConsole,
     visionModel,
@@ -354,6 +361,8 @@ export const useSandbox = () => {
     consoleHeight,
     isPanelOpen,
     isEnabled,
+    isInline,
+    isPanel,
     isAutoScreenshot,
     isIncludeConsole,
     isOpen,

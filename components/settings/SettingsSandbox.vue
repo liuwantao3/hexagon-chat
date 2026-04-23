@@ -5,6 +5,7 @@ import { keysStore } from '~/utils/settings'
 const { t } = useI18n()
 
 const sandboxEnabled = useStorage<boolean>('sandboxEnabled', false)
+const sandboxMode = useStorage<'inline' | 'panel'>('sandboxMode', 'inline')
 const autoScreenshot = useStorage<boolean>('autoScreenshot', true)
 const includeConsole = useStorage<boolean>('includeConsole', true)
 const visionModel = useStorage<string>('visionModel', '')
@@ -43,6 +44,21 @@ watch(visionModels, (newModels) => {
     <div class="space-y-4">
       <UFormGroup :label="t('settings.sandbox.enable')">
         <UToggle v-model="sandboxEnabled" />
+      </UFormGroup>
+
+      <UFormGroup v-if="sandboxEnabled" :label="t('settings.sandbox.displayMode')">
+        <USelect 
+          v-model="sandboxMode" 
+          :options="[
+            { label: 'Inline in chat', value: 'inline' },
+            { label: 'Separate panel', value: 'panel' }
+          ]"
+          option-label="label"
+          option-value="value"
+        />
+        <p class="text-xs text-gray-500 mt-1">
+          {{ sandboxMode === 'inline' ? 'HTML displayed inline in chat messages' : 'HTML displayed in separate panel alongside chat' }}
+        </p>
       </UFormGroup>
 
       <UFormGroup :label="t('settings.sandbox.autoScreenshot')">

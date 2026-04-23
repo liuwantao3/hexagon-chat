@@ -72,6 +72,7 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
       messages: data.messages,
       stream: data.stream,
       skills: data.skills,
+      sessionId: data.sessionId,
     }),
     // body: {
     //   knowledgebaseId: data.knowledgebaseId,
@@ -126,122 +127,175 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
       for (const line of chunk.split(splitter)) {
         if (!line) continue
 
-        // Try to parse, if fails accumulate and try with next chunk
-        let chatMessage
-        try {
-          chatMessage = JSON.parse(line) as ResponseMessage | ResponseRelevantDocument
-        } catch (e) {
-          // Accumulate partial content for next iteration
-          prevPart += line + splitter
-          console.warn('Partial message accumulated, waiting for more data')
+        // Accumulate partial content until we have a complete JSON (starts with { and ends with })
+        prevPart += line
+        
+        // Try to detect complete JSON by checking if it has balanced braces
+        const tryParse = prevPart.trim()
+        if (!tryParse.startsWith('{')) {
+          prevPart = ''
           continue
         }
-        const isMessage = !('type' in chatMessage) && 'message' in chatMessage
-        const isToolResult = isMessage && chatMessage.message.toolResult === true
         
-        // Handle flow_complete event from multi-tool loop
-        if ('type' in chatMessage && chatMessage.type === 'flow_complete') {
-          console.log('[Worker] Flow complete, sending complete event')
-          sendMessageToMain({ id, uid, sessionId: data.sessionId, type: 'complete' })
-          break
+        // Count braces to detect complete JSON
+        let braceCount = 0
+        let inString = false
+        let escape = false
+        for (const char of tryParse) {
+          if (escape) {
+            escape = false
+            continue
+          }
+          if (char === '\\') {
+            escape = true
+            continue
+          }
+          if (char === '"') {
+            inString = !inString
+            continue
+          }
+          if (!inString) {
+            if (char === '{') braceCount++
+            if (char === '}') braceCount--
+          }
         }
-
-        if (isMessage) {
-          console.log('[Worker] Message received, isToolResult:', isToolResult, 'toolCalls:', chatMessage.message.toolCalls?.length || 0, 'content length:', chatMessage.message.content?.length)
+        
+        // If braces are balanced, we have a complete JSON
+        if (braceCount === 0 && tryParse.endsWith('}')) {
+          const lineToParse = prevPart.trim()
+          prevPart = ''
           
-          if (isToolResult) {
-            // Tool result - store separately with its content
-            msgContent = chatMessage.message.content
-            console.log('[Worker] Tool result stored, toolName:', chatMessage.message.toolName)
-          } else {
-            // Assistant message - if first in stream, use as-is. If continuing, append.
-            // BUT we also need to track that we have a NEW message
-            if (id === -1) {
+          // DEBUG: Log raw line
+          console.log('[Worker] Raw line (complete):', lineToParse.substring(0, 200))
+          console.log('[Worker] Line length:', lineToParse.length)
+          
+          // Try to parse
+          let chatMessage
+          try {
+            chatMessage = JSON.parse(lineToParse) as ResponseMessage | ResponseRelevantDocument
+            console.log('[Worker] Parsed message keys:', Object.keys(chatMessage))
+            if ('message' in chatMessage) {
+              console.log('[Worker] message.toolResult:', chatMessage.message.toolResult, 'toolName:', chatMessage.message.toolName)
+              console.log('[Worker] message.content preview:', String(chatMessage.message.content).substring(0, 100))
+            }
+          } catch (e) {
+            console.warn('JSON parse error:', e)
+            continue
+          }
+          
+          const isMessage = !('type' in chatMessage) && 'message' in chatMessage
+          const isToolResult = isMessage && chatMessage.message.toolResult === true
+          
+          // DEBUG: Log what we actually received
+          if (isMessage) {
+            console.log('[Worker] Full message keys:', Object.keys(chatMessage.message))
+            console.log('[Worker] toolResult value:', chatMessage.message.toolResult, 'type:', typeof chatMessage.message.toolResult)
+          }
+          
+          // Handle flow_complete event from multi-tool loop
+          if ('type' in chatMessage && chatMessage.type === 'flow_complete') {
+            console.log('[Worker] Flow complete, sending complete event')
+            sendMessageToMain({ id, uid, sessionId: data.sessionId, type: 'complete' })
+            break
+          }
+
+          if (isMessage) {
+            console.log('[Worker] Message received, isToolResult:', isToolResult, 'toolCalls:', chatMessage.message.toolCalls?.length || 0, 'content length:', chatMessage.message.content?.length)
+            
+            if (isToolResult) {
+              // Tool result - store separately with its content
               msgContent = chatMessage.message.content
+              console.log('[Worker] Tool result stored, toolName:', chatMessage.message.toolName)
             } else {
-              // This is a new assistant message after a tool result
-              msgContent = chatMessage.message.content
+              // Assistant message
+              if (id === -1) {
+                msgContent = chatMessage.message.content
+              } else {
+                msgContent = chatMessage.message.content
+              }
+              console.log('[Worker] Assistant message stored, toolCalls:', chatMessage.message.toolCalls?.length || 0)
             }
-            console.log('[Worker] Assistant message stored, toolCalls:', chatMessage.message.toolCalls?.length || 0)
           }
-        }
 
-        const result: ChatHistory = {
-          role: isToolResult ? 'user' as const : 'assistant' as const,
-          model: data.model,
-          sessionId: data.sessionId,
-          message: msgContent,
-          failed: false,
-          canceled: false,
-          startTime: data.timestamp,
-          endTime: Date.now(),
-          toolResult: isToolResult,
-          toolCallId: isToolResult ? chatMessage.message.toolCallId : undefined,
-          toolName: isToolResult ? chatMessage.message.toolName : undefined,
-          toolInput: isToolResult ? chatMessage.message.toolInput : undefined,
-          toolOutput: isToolResult ? chatMessage.message.toolOutput : undefined,
-          toolCalls: chatMessage.message.toolCalls,
-        }
+          const result: ChatHistory = {
+            role: isToolResult ? 'user' as const : 'assistant' as const,
+            model: data.model,
+            sessionId: data.sessionId,
+            message: msgContent,
+            failed: false,
+            canceled: false,
+            startTime: data.timestamp,
+            endTime: Date.now(),
+            toolResult: isToolResult,
+            toolCallId: isToolResult ? chatMessage.message.toolCallId : undefined,
+            toolName: isToolResult ? chatMessage.message.toolName : undefined,
+            toolInput: isToolResult ? chatMessage.message.toolInput : undefined,
+            toolOutput: isToolResult ? chatMessage.message.toolOutput : undefined,
+            toolCalls: chatMessage.message.toolCalls,
+          }
 
-        // Create new record for tool results OR new iteration responses
-        // For tool results: always create new record
-        // For non-tool responses: check if there are tool calls (indicates new iteration)
-        const isNewIteration = chatMessage.message.toolCalls?.length > 0
-        const shouldCreateNew = isToolResult || isNewIteration
-        
-        if (id === -1 || shouldCreateNew) {
-          console.log('[Worker] Creating new message, isToolResult:', isToolResult, 'isNewIteration:', isNewIteration)
-          id = await addToDB(result)
+          // Create new record for tool results OR new iteration responses
+          const isNewIteration = chatMessage.message.toolCalls?.length > 0
+          const shouldCreateNew = isToolResult || isNewIteration
+          
+          if (id === -1 || shouldCreateNew) {
+            console.log('[Worker] Creating new message, isToolResult:', isToolResult, 'isNewIteration:', isNewIteration)
+            id = await addToDB(result)
+          } else {
+            // Update existing record for incremental content
+            console.log('[Worker] Updating existing message, id:', id)
+            if (isMessage && Date.now() - t > 1000) {
+              t = Date.now()
+              updateToDB({ id, message: msgContent })
+            }
+          }
+          
+          // After tool result, reset id to -1 so next iteration creates new record
+          if (isToolResult) {
+            console.log('[Worker] Tool result processed, resetting id for next iteration')
+            id = -1
+          }
+
+          if (isMessage) {
+            const toolCalls = chatMessage.message.toolCalls
+            const contentRole = isToolResult ? 'user' : 'assistant'
+            sendMessageToMain({
+              uid, type: 'message', sessionId: data.sessionId, id,
+              data: {
+                id,
+                content: msgContent,
+                startTime: data.timestamp,
+                endTime: Date.now(),
+                role: contentRole,
+                model: data.model,
+                toolResult: isToolResult,
+                toolCallId: isToolResult ? chatMessage.message.toolCallId : undefined,
+                toolName: isToolResult ? chatMessage.message.toolName : undefined,
+                toolInput: isToolResult ? chatMessage.message.toolInput : undefined,
+                toolOutput: isToolResult ? chatMessage.message.toolOutput : undefined,
+                toolCalls: toolCalls,
+              }
+            })
+          } else if (chatMessage.type === 'relevant_documents') {
+            relevantDocs.push(...chatMessage.relevant_documents)
+            sendMessageToMain({
+              uid, type: 'relevant_documents', sessionId: data.sessionId, id,
+              data: {
+                id,
+                content: msgContent,
+                startTime: data.timestamp,
+                endTime: Date.now(),
+                role: 'assistant',
+                model: data.model,
+                relevantDocs: chatMessage.relevant_documents,
+                toolResult: false
+              },
+            })
+          }
         } else {
-          // Update existing record for incremental content
-          console.log('[Worker] Updating existing message, id:', id)
-          if (isMessage && Date.now() - t > 1000) {
-            t = Date.now()
-            updateToDB({ id, message: msgContent })
-          }
-        }
-        
-        // After tool result, reset id to -1 so next iteration creates new record
-        if (isToolResult) {
-          console.log('[Worker] Tool result processed, resetting id for next iteration')
-          id = -1
-        }
-
-        if (isMessage) {
-          const toolCalls = chatMessage.message.toolCalls
-          const contentRole = isToolResult ? 'user' : 'assistant'
-          sendMessageToMain({
-            uid, type: 'message', sessionId: data.sessionId, id,
-            data: {
-              id,
-              content: msgContent,
-              startTime: data.timestamp,
-              endTime: Date.now(),
-              role: contentRole,
-              model: data.model,
-              toolResult: isToolResult,
-              toolCallId: isToolResult ? chatMessage.message.toolCallId : undefined,
-              toolName: isToolResult ? chatMessage.message.toolName : undefined,
-              toolInput: isToolResult ? chatMessage.message.toolInput : undefined,
-              toolOutput: isToolResult ? chatMessage.message.toolOutput : undefined,
-              toolCalls: toolCalls,
-            }
-          })
-        } else if (chatMessage.type === 'relevant_documents') {
-          relevantDocs.push(...chatMessage.relevant_documents)
-          sendMessageToMain({
-            uid, type: 'relevant_documents', sessionId: data.sessionId, id,
-            data: {
-              id,
-              content: msgContent,
-              startTime: data.timestamp,
-              endTime: Date.now(),
-              role: 'assistant',
-              model: data.model,
-              relevantDocs: chatMessage.relevant_documents,
-              toolResult: false
-            },
-          })
+          // Incomplete JSON, wait for more data
+          console.log('[Worker] Incomplete JSON, accumulating... braceCount:', braceCount)
+          continue
         }
       }
     }

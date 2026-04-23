@@ -26,6 +26,116 @@ import type { ContextKeys } from '~/server/middleware/keys'
 import type { H3Event } from 'h3'
 import { skillLoader, setSkillConfigs } from '@/server/skills'
 
+// Handle confirm tool - returns confirmation prompt for UI to display
+async function handleConfirmTool(toolCall: any, toolArgs: any, sessionId: number) {
+  const { message, action, details } = toolArgs
+  const toolCallId = toolCall.id || `call_${Date.now()}`
+  const confirmId = `confirm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  
+  // Store confirm request in global for polling
+  const confirmRequests = (global as any).confirmRequests || new Map()
+  confirmRequests.set(confirmId, {
+    sessionId,
+    action: action || 'Unknown action',
+    message: message || 'Please confirm',
+    details: details || '',
+    response: null,
+    createdAt: Date.now()
+  })
+  ;(global as any).confirmRequests = confirmRequests
+  
+  // Return the confirmation info - UI will display it
+  // The LLM will wait for user response after seeing this
+  return {
+    content: JSON.stringify({
+      success: true,
+      confirm: true,
+      confirmId,
+      action: action || 'Unknown action',
+      message: message || 'Please confirm',
+      details: details || '',
+      awaiting: true,
+      prompt: `ACTION: ${action || 'Unknown'}\n${message || 'Please confirm this action'}\n\nClick Confirm to proceed or Deny to cancel.`
+    }),
+    tool_call_id: toolCallId
+  }
+}
+
+// Poll for confirm response
+async function pollForConfirmResponse(confirmId: string, maxWaitMs: number = 120000): Promise<string | null> {
+  const startTime = Date.now()
+  
+  while (Date.now() - startTime < maxWaitMs) {
+    // Always get fresh reference to global map
+    const confirmRequests = (global as any).confirmRequests || new Map()
+    const request = confirmRequests.get(confirmId)
+    console.log('[pollForConfirmResponse] Checking confirmId:', confirmId, 'request:', request)
+    if (request && request.response) {
+      confirmRequests.delete(confirmId)
+      return request.response
+    }
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+  
+  return null
+}
+
+// Handle summarize tool - generates actual summary using the LLM
+async function handleSummarizeTool(toolCall: any, currentMessages: any[], llm: any, family: string) {
+    const args = typeof toolCall.args === 'string' ? JSON.parse(toolCall.args) : toolCall.args
+    const { focus, format = 'detailed' } = args
+    
+    // Build conversation context from messages
+    const conversationParts = currentMessages
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .map(m => `${m.role}: ${String(m.content).substring(0, 500)}`)
+        .join('\n\n')
+    
+    const summaryPrompt = format === 'brief'
+        ? `Provide a brief summary of the conversation in 2-3 sentences:\n\n${conversationParts}`
+        : `Create a comprehensive summary of the conversation with the following sections:
+
+## Goal
+What goal(s) is the user trying to accomplish?
+
+## Instructions
+What important instructions did the user give?
+
+## Discoveries
+What notable things were learned during the conversation?
+
+## Accomplished
+What work has been completed?
+
+## Relevant Files/Directories
+A structured list of important files and directories mentioned or modified.
+
+## Pending Tasks
+What tasks remain to be done?
+
+Conversation:
+${conversationParts}
+
+Please fill in each section with relevant details from the conversation above.`
+
+    try {
+        // Call LLM to generate summary
+        const summaryResponse = await llm.invoke(summaryPrompt)
+        const summaryText = typeof summaryResponse === 'string' ? summaryResponse : summaryResponse.content
+        
+        return {
+            content: summaryText,
+            tool_call_id: toolCall.id
+        }
+    } catch (e) {
+        console.log('[handleSummarizeTool] Error:', e)
+        return {
+            content: `Error generating summary: ${e.message}`,
+            tool_call_id: toolCall.id
+        }
+    }
+}
+
 function isUsageLimitError(error: any): boolean {
     const errorStr = String(error?.message || error || '')
     const statusCode = error?.status_code || error?.base_resp?.status_code
@@ -109,6 +219,7 @@ interface RequestBody {
     }[]
     stream: any
     skills?: string[]
+    sessionId?: number
 }
 
 const SYSTEM_TEMPLATE = `Answer the user's question based on the context below.
@@ -159,9 +270,9 @@ const normalizeMessages = (messages: RequestBody['messages']): BaseMessage[] => 
 
 export default defineEventHandler(async (event) => {
     try {
-        const { knowledgebaseId, model, family, messages, stream, skills } = await readBody<RequestBody>(event)
+        const { knowledgebaseId, model, family, messages, stream, skills, sessionId } = await readBody<RequestBody>(event)
 
-        console.log("model family stream", model, family, stream)
+        console.log("model family stream", model, family, stream, "sessionId:", sessionId)
         if (knowledgebaseId) {
             console.log("Chat with knowledge base with id: ", knowledgebaseId)
             const knowledgebase = await prisma.knowledgeBase.findUnique({
@@ -310,35 +421,36 @@ export default defineEventHandler(async (event) => {
 
             // Bind tools and use Agent for multi-round execution
             // Inject system prompt for code agent mode
-            let finalMessages = messages
+            
+            // Helper to strip large base64 data from messages before sending to LLM
+            const cleanMessagesForLLM = (msgs: RequestBody['messages']): RequestBody['messages'] => {
+                return msgs.map(msg => {
+                    if (typeof msg.content === 'string' && msg.content.includes('data:image/png;base64')) {
+                        return { ...msg, content: msg.content.substring(0, 100) + '...(image output omitted)' }
+                    }
+                    return msg
+                })
+            }
+            
+            // Clean messages before using them
+            const messagesForLLM = cleanMessagesForLLM(messages)
+            
+            let finalMessages = messagesForLLM
             if (toolsToUse.length > 0) {
                 const toolDescriptions = toolsToUse.map(t => t.name + ': ' + t.description).join(', ')
-                const codeAgentSystemPrompt = `You have access to tools. When a task requires computation, data processing, or code execution:
-1. Use the available tools to accomplish the task step by step
-2. If a tool execution succeeds, check if the task is complete
-3. If not complete, continue with additional tool calls or provide your final answer
-4. Only respond with the final result after all necessary executions are done
-
-IMPORTANT for plotting/graphics:
-- Do NOT use plt.show() as it blocks until the window is closed, causing timeouts
-- Instead, save plots directly using plt.savefig('filename.png')
-- matplotlib will display the saved file automatically
-
-IMPORTANT for JavaScript:
-- You cannot install npm packages in this environment
-- Use only built-in Node.js modules (math, console, etc.)
-- For graphics, Python/matplotlib is recommended
+                const codeAgentSystemPrompt = `You have access to tools. Use them to accomplish the user's task.
+After tools execute successfully, provide your final answer to the user. Do NOT call tools repeatedly for the same task.
 
 Available tools: ${toolDescriptions}`
 
                 finalMessages = [
                     { role: 'system', content: codeAgentSystemPrompt, toolCallId: '', toolResult: false },
-                    ...messages
+                    ...messagesForLLM
                 ]
             } else if (skillSystemPrompt) {
                 // Inject skill system prompts
-                const systemMessages = messages.filter(m => m.role === 'system')
-                const nonSystemMessages = messages.filter(m => m.role !== 'system')
+                const systemMessages = messagesForLLM.filter(m => m.role === 'system')
+                const nonSystemMessages = messagesForLLM.filter(m => m.role !== 'system')
 
                 const combinedSystemPrompt = skillSystemPrompt
 
@@ -347,9 +459,9 @@ Available tools: ${toolDescriptions}`
                     ...systemMessages,
                     ...nonSystemMessages
                 ]
-            }
+}
 
-            console.log('[Skills] Final messages count:', finalMessages.length)
+            console.log('[Skills] Final messages count:', messagesForLLM.length)
             console.log('[Skills] Loaded skills:', skills, 'with', skillTools.length, 'tools')
             console.log('[Skills] toolsToUse:', toolsToUse.map(t => t.name))
 
@@ -400,6 +512,14 @@ Available tools: ${toolDescriptions}`
                                 while (shouldContinue && iteration < maxIterations) {
                                     iteration++
                                     console.log(`[Chat] Iteration ${iteration}, messages count:`, currentMessages.length)
+                                    
+                                    // Clean currentMessages to remove base64 before sending to LLM
+                                    currentMessages = currentMessages.map(msg => {
+                                        if (typeof msg.content === 'string' && msg.content.includes('data:image/png;base64')) {
+                                            return { ...msg, content: msg.content.substring(0, 100) + '...(image omitted)' }
+                                        }
+                                        return msg
+                                    })
                                     
                                     // Initialize assistantContent for this iteration
                                     let assistantContent: string = ''
@@ -466,18 +586,144 @@ Available tools: ${toolDescriptions}`
                                         break
                                     }
 
-                                    console.log(`[Chat] Executing ${toolCalls.length} tool call(s):`, toolCalls.map(tc => tc.name))
-                                    const keys = event.context.keys
-                                    if (keys?.minimax) {
-                                        setImageToolKeys(keys.minimax.key, keys.minimax.endpoint, keys.minimax.secondary)
-                                    }
-
                                     // Execute tool calls and collect results
                                     const toolResults: Array<{name: string, content: string, toolCallId: string, args: any}> = []
                                     
-                                    for (const toolCall of toolCalls) {
+for (const toolCall of toolCalls) {
                                         console.log('Tool call: ', toolCall)
                                         const selectedTool = toolsMap[toolCall.name]
+                                        
+                                        // Convert toolCall args if it's a string
+                                            const argsStr = typeof toolCall.args === 'string' ? toolCall.args : JSON.stringify(toolCall.args)
+                                            const toolArgs = argsStr ? JSON.parse(argsStr) : {}
+                                            
+                                            // Special handling for confirm tool - wait for user response
+                                            if (toolCall.name === 'confirm') {
+                                                const handleResult = await handleConfirmTool(toolCall, toolArgs, sessionId)
+                                                toolResults.push({
+                                                    name: toolCall.name,
+                                                    content: handleResult.content,
+                                                    toolCallId: handleResult.tool_call_id,
+                                                    args: toolArgs,
+                                                })
+                                            
+                                                const toolMessage = {
+                                                    message: {
+                                                        role: 'user',
+                                                        toolResult: true,
+                                                        toolCallId: handleResult.tool_call_id,
+                                                        toolName: toolCall.name,
+                                                        toolInput: toolArgs,
+                                                        toolOutput: handleResult.content,
+                                                        content: handleResult.content,
+                                                    },
+                                                }
+                                                yield `${JSON.stringify(toolMessage)} \n\n`
+                                            
+                                                // Extract confirmId from the result
+                                                let confirmId = null
+                                                try {
+                                                    const resultObj = JSON.parse(handleResult.content)
+                                                    confirmId = resultObj.confirmId
+                                                } catch (e) {
+                                                    console.log('[Chat] Error parsing confirm result:', e)
+                                                }
+                                            
+                                                if (confirmId) {
+                                                    console.log('[Chat] Polling for confirm response:', confirmId)
+                                                    const response = await pollForConfirmResponse(confirmId, 120000)
+                                            
+                                                    if (response === 'confirmed') {
+                                                        console.log('[Chat] User confirmed, continuing...')
+                                                        // Update tool result to show confirmation
+                                                        const confirmedContent = JSON.stringify({
+                                                            success: true,
+                                                            confirm: true,
+                                                            confirmed: true,
+                                                            message: 'User confirmed the action',
+                                                            prompt: 'The user has confirmed this action. You may now proceed with the action, or respond to the user that confirmation was received.'
+                                                        })
+                                                        // Yield confirmation result to client
+                                                        const confirmationMessage = {
+                                                            message: {
+                                                                role: 'user',
+                                                                toolResult: true,
+                                                                toolCallId: handleResult.tool_call_id,
+                                                                toolName: toolCall.name,
+                                                                toolInput: toolArgs,
+                                                                toolOutput: confirmedContent,
+                                                                content: confirmedContent,
+                                                            },
+                                                        }
+                                                        yield `${JSON.stringify(confirmationMessage)} \n\n`
+                                                        // Continue to next iteration - let LLM decide what to do next
+                                                        continue
+                                                    } else if (response === 'denied') {
+                                                        console.log('[Chat] User denied, ending loop')
+                                                        // User denied - add denial message and exit
+                                                        const denialContent = JSON.stringify({
+                                                            success: false,
+                                                            confirm: true,
+                                                            confirmed: false,
+                                                            message: 'User denied the action',
+                                                            prompt: 'The user has denied this action. Do NOT call any more tools. Simply inform the user that the action was denied.'
+                                                        })
+                                                        toolResults.push({
+                                                            name: 'confirm',
+                                                            content: denialContent,
+                                                            toolCallId: handleResult.tool_call_id,
+                                                            args: toolArgs,
+                                                        })
+                                                        const denialMessage = {
+                                                            message: {
+                                                                role: 'user',
+                                                                toolResult: true,
+                                                                toolCallId: handleResult.tool_call_id,
+                                                                toolName: toolCall.name,
+                                                                toolInput: toolArgs,
+                                                                toolOutput: denialContent,
+                                                                content: denialContent,
+                                                            },
+                                                        }
+                                                        yield `${JSON.stringify(denialMessage)} \n\n`
+                                                        shouldContinue = false
+                                                        break
+                                                    } else {
+                                                        console.log('[Chat] Confirm timeout, ending loop')
+                                                        // Timeout - exit
+                                                        shouldContinue = false
+                                                        break
+                                                    }
+                                                } else {
+                                                    continue
+                                                }
+                                            }
+                                            
+                                            // Special handling for summarize tool - generate actual summary
+                                            if (toolCall.name === 'summarize') {
+                                            const summaryResult = await handleSummarizeTool(toolCall, currentMessages, llm, family)
+                                            toolResults.push({
+                                                name: toolCall.name,
+                                                content: summaryResult.content,
+                                                toolCallId: summaryResult.tool_call_id,
+                                                args: toolCall.args,
+                                            })
+                                            
+                                            const toolMessage = {
+                                                message: {
+                                                    role: 'user',
+                                                    toolResult: true,
+                                                    toolCallId: summaryResult.tool_call_id,
+                                                    toolName: toolCall.name,
+                                                    toolInput: toolCall.args,
+                                                    toolOutput: summaryResult.content,
+                                                    content: summaryResult.content,
+                                                },
+                                            }
+                                            yield `${JSON.stringify(toolMessage)} \n\n`
+                                            continue
+                                        }
+                                        
                                         if (selectedTool) {
                                             const result = await selectedTool.invoke(toolCall)
                                             toolResults.push({
@@ -488,6 +734,9 @@ Available tools: ${toolDescriptions}`
                                             })
                                             
                                             // Yield tool result message
+                                            console.log('[Chat API] Yielding tool result, toolName:', toolCall.name)
+                                            console.log('[Chat API] result.content type:', typeof result.content)
+                                            console.log('[Chat API] result.content preview:', String(result.content).substring(0, 100))
                                             const toolMessage = {
                                                 message: {
                                                     role: 'user',
@@ -499,26 +748,59 @@ Available tools: ${toolDescriptions}`
                                                     content: result.content,
                                                 },
                                             }
-                                            yield `${JSON.stringify(toolMessage)} \n\n`
+                                            console.log('[Chat API] toolMessage content preview:', String(toolMessage.message.content).substring(0, 100))
+                                            console.log('[Chat API] Full toolMessage keys:', Object.keys(toolMessage.message))
+                                            const toolMessageStr = JSON.stringify(toolMessage)
+                                            console.log('[Chat API] toolMessageStr preview:', toolMessageStr.substring(0, 200))
+                                        yield `${toolMessageStr} \n\n`
                                         }
                                     }
 
                                     // Add assistant message and tool results to continue conversation
+                                    // Don't include full toolOutput (contains base64 images) in messages to LLM
                                     currentMessages = [
                                         ...currentMessages,
                                         { role: 'assistant', content: finalContent },
-                                        ...toolResults.map(tr => ({
-                                            role: 'user',
-                                            toolResult: true,
-                                            toolCallId: tr.toolCallId,
-                                            toolName: tr.name,
-                                            toolInput: tr.args,
-                                            toolOutput: tr.content,
-                                            content: tr.content,
-                                        })),
+                                        ...toolResults.map(tr => {
+                                            let msgContent = tr.content
+                                            // Add explicit instruction to stop after successful tool execution
+                                            if ((tr.name === 'execute_on_host' && tr.content.includes('saved')) ||
+                                                (tr.name === 'display_image' && tr.content.includes('success')) ||
+                                                (tr.name === 'sandbox_execute' && tr.content.includes('success')) ||
+                                                (tr.name === 'summarize' && tr.content.includes('summarize')) ||
+                                                (tr.name === 'confirm' && tr.content.includes('awaiting'))) {
+                                                msgContent = `${tr.content}. TASK COMPLETE. Do NOT call any more tools. Just respond to the user.`
+                                            }
+                                            // For confirmed status, add instruction to NOT call tools again
+                                            if (tr.name === 'confirm' && tr.content.includes('"confirmed":true')) {
+                                                msgContent = `${tr.content}. The user has confirmed. Do NOT call the confirm tool again. Just respond to the user about the confirmation.`
+                                            }
+                                            return {
+                                                role: 'user',
+                                                toolResult: true,
+                                                toolCallId: tr.toolCallId,
+                                                toolName: tr.name,
+                                                content: msgContent,
+                                            }
+                                        }),
                                     ]
                                     
                                     console.log(`[Chat] Added ${toolResults.length} tool results, continuing with ${currentMessages.length} messages`)
+                                    
+                                    // Check if any tool indicated task complete, force exit
+                                    // Note: confirm with "confirmed" should NOT force exit - let LLM respond
+                                    const anyComplete = toolResults.some(tr => 
+                                        tr.content.includes('TASK COMPLETE') || 
+                                        (tr.name === 'execute_on_host' && tr.content.includes('saved')) ||
+                                        (tr.name === 'display_image' && tr.content.includes('success')) ||
+                                        (tr.name === 'sandbox_execute' && tr.content.includes('success')) ||
+                                        (tr.name === 'summarize' && tr.content.includes('summarize')) ||
+                                        (tr.name === 'confirm' && tr.content.includes('awaiting'))
+                                    )
+                                    if (anyComplete) {
+                                        console.log('[Chat] Task completed based on tool result, ending loop')
+                                        shouldContinue = false
+                                    }
                                 }
                                 
                                 if (iteration >= maxIterations) {

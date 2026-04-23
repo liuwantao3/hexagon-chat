@@ -172,6 +172,7 @@
     "sandbox": {
       "sandbox": "Sandbox",
       "enable": "Enable Sandbox",
+      "displayMode": "Display Mode",
       "autoScreenshot": "Auto Screenshot After Code",
       "visionModel": "Vision Model",
       "selectVisionModel": "Select a vision model",

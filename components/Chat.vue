@@ -97,6 +97,13 @@ const handleSandboxCode = (content: string, isToolResult?: boolean) => {
     console.log('[Sandbox] Sandbox not enabled')
     return false
   }
+  
+  // In inline mode, HTML is displayed via ToolCallItem, not the sandbox panel
+  if (sandbox?.isInline?.value) {
+    console.log('[Sandbox] Inline mode - let ToolCallItem handle display')
+    return false
+  }
+  
   if (!content || typeof content !== 'string') {
     return false
   }
@@ -391,6 +398,10 @@ onReceivedMessage(data => {
       if (msgContent) {
         handleSandboxCode(msgContent, isToolResult)
       }
+
+      if (isToolResult) {
+        nextTick(() => scrollToBottom('smooth'))
+      }
       break
     case 'relevant_documents':
       updateMessage(data, { type: undefined, ...data.data })
@@ -420,6 +431,15 @@ onMounted(async () => {
 })
 
 function updateMessage(data: WorkerSendMessage, newData: Partial<ChatMessage>) {
+  const isToolResult = newData.toolResult === true
+  const isAssistantWithToolCalls = newData.toolCalls && newData.toolCalls.length > 0
+
+  if (isToolResult) {
+    console.log('[Chat] updateMessage - tool result, pushing new message, id:', data.id, 'role:', newData.role)
+    messages.value.push(newData as ChatMessage)
+    return
+  }
+
   const index = 'id' in data ? messages.value.findIndex(el => el.id === data.uid || el.id === data.id) : -1
   if (index > -1) {
     console.log('[Chat] updateMessage - updating existing, id:', data.id, 'index:', index)
@@ -551,7 +571,7 @@ async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
         <UTooltip v-if="sessionId" :text="t('chat.modifyTips')">
           <UButton icon="i-iconoir-edit-pencil" color="gray" @click="onOpenSettings" />
         </UTooltip>
-        <UTooltip v-if="sandbox?.isEnabled?.value" :text="sandbox?.isOpen?.value ? 'Close Sandbox' : 'Open Sandbox'" :popper="{ placement: 'top-start' }">
+        <UTooltip v-if="sandbox?.isEnabled?.value && sandbox?.isPanel" :text="sandbox?.isOpen?.value ? 'Close Sandbox' : 'Open Sandbox'" :popper="{ placement: 'top-start' }">
           <UButton 
             :icon="sandbox?.isOpen?.value ? 'i-heroicons-x-mark' : 'i-heroicons-code-bracket'" 
             :color="sandbox?.isOpen?.value ? 'primary' : 'gray'"
@@ -630,6 +650,9 @@ async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
                 <UIcon name="i-material-symbols-history" class="mr-1"></UIcon>
                 <span class="text-sm">{{ sessionInfo?.attachedMessagesCount }}</span>
               </div>
+            </UTooltip>
+            <UTooltip text="Settings" :popper="{ placement: 'top-start' }">
+              <UButton icon="i-heroicons-cog-6-tooth" color="gray" variant="ghost" to="/settings" class="ml-2" />
             </UTooltip>
           </div>
         </ChatInputBox>
