@@ -95,12 +95,21 @@ export function useModels(options?: Options) {
         }
       }
 
-      const response = await $fetchWithAuth('/api/models/', {
-        headers: getKeysHeader(),
-        signal: controller.signal,
-      })
-      firstLoaded = false
-      models.value = response as ModelItem[]
+      try {
+        const response = await $fetchWithAuth('/api/models/', {
+          headers: getKeysHeader(),
+          signal: controller.signal,
+        })
+        firstLoaded = false
+        models.value = response as ModelItem[]
+      } catch (error: any) {
+        if (error.name === 'AbortError' || error.name === 'CancelledError' || error?.cause?.name === 'AbortError') {
+          loading.value = false
+          isLoading = false
+          return
+        }
+        console.error('Failed to load models:', error)
+      }
     }
     loading.value = false
     isLoading = false
@@ -121,6 +130,10 @@ export function useModels(options?: Options) {
 }
 
 export function parseModelValue(val: string) {
-  const [family, ...parts] = val.split(MODEL_FAMILY_SEPARATOR)
-  return { family, name: parts.join(MODEL_FAMILY_SEPARATOR) }
+  const parts = val.split(MODEL_FAMILY_SEPARATOR)
+  if (parts.length === 1) {
+    return { family: '', name: val }
+  }
+  const [family, ...rest] = parts
+  return { family, name: rest.join(MODEL_FAMILY_SEPARATOR) }
 }

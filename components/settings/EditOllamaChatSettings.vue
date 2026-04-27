@@ -6,11 +6,9 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const config = useRuntimeConfig()
 
 const formData = reactive({
   chatModels: props.providerData?.chatSettings?.models?.join(', ') || '',
-  attachedMessagesCount: props.providerData?.chatSettings?.attachedMessagesCount || 10,
 })
 
 function onSubmit() {
@@ -21,7 +19,6 @@ function onSubmit() {
   const data = {
     chatSettings: {
       models: chatModels,
-      attachedMessagesCount: formData.attachedMessagesCount,
     },
   }
   
@@ -40,13 +37,6 @@ function onSubmit() {
       <UForm :state="formData" @submit="onSubmit">
         <UFormGroup :label="t('settings.defaultModel')" class="mb-4" :hint="t('global.optional')">
           <UInput v-model.trim="formData.chatModels" size="lg" placeholder="llama3, mistral" />
-        </UFormGroup>
-        
-        <UFormGroup :label="t('chat.attachedMessagesCount')">
-          <div class="flex items-center">
-            <span class="mr-2 w-6 text-primary-500">{{ formData.attachedMessagesCount }}</span>
-            <URange v-model="formData.attachedMessagesCount" :min="0" :max="config.public.chatMaxAttachedMessages" size="md" />
-          </div>
         </UFormGroup>
         
         <div class="flex justify-end gap-2 mt-6">

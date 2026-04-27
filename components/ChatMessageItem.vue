@@ -58,7 +58,9 @@ const timeUsed = computed(() => {
 })
 
 const modelName = computed(() => {
-  return parseModelValue(props.message.model)
+  const modelStr = props.message.model || ''
+  if (!modelStr) return { family: '', name: '' }
+  return parseModelValue(modelStr)
 })
 
 watch(() => props.showToggleButton, (value) => {

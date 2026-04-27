@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie'
 
 export interface ChatSession {
   id?: number
-  userId: string
+  userId?: string | null
   title: string
   createTime: number
   updateTime: number
@@ -17,7 +17,7 @@ export interface ChatSession {
 
 export interface ChatHistory {
   id?: number
-  userId: string | null
+  userId?: string | null
   sessionId: number
   message: string | any[]
   startTime: number

@@ -12,6 +12,7 @@ export function useMenus() {
     { label: t('menu.stories'), icon: 'i-heroicons-bookmark', to: '/stories' },
     { label: t('menu.learning'), icon: 'i-heroicons-academic-cap', to: '/learning' },
     { label: t('menu.chat'), icon: 'i-iconoir-chat-lines', to: '/chat' },
+    { label: 'Wiki', icon: 'i-heroicons-bookmark-square', to: '/wiki' },
     { label: t('menu.settings'), icon: 'i-heroicons-cog-6-tooth', to: '/settings' }
   ])
 }

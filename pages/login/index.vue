@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { object, string } from 'yup'
+import { useDeviceId } from '~/composables/useDeviceId'
 
 definePageMeta({
   auth: {
@@ -9,13 +10,13 @@ definePageMeta({
 })
 
 const { t } = useI18n()
-const { signIn } = useAuth()
 const toast = useToast()
+const { deviceId } = useDeviceId()
 
 const loading = ref(false)
 const schema = object({
   name: string().min(1, t("auth.nameRule1")).required(t('global.required')),
-  password: string().min(8, t('auth.passwordRule1')).required(t('global.required'))
+  password: string().min(8, t("auth.passwordRule1")).required(t('global.required'))
 })
 
 const state = reactive({
@@ -26,22 +27,39 @@ const state = reactive({
 async function onSubmit() {
   loading.value = true
   try {
-    await signIn({
-      username: state.name,
-      password: state.password
-    }, {
-      callbackUrl: '/'
+    const anonId = deviceId.value
+    console.log('[Login] Using anonymousId:', anonId)
+    
+    const response = await $fetch('/api/auth/login', {
+      method: 'POST',
+      body: {
+        username: state.name,
+        password: state.password
+      },
+      headers: {
+        'x-anonymous-id': anonId || ''
+      }
     })
+    
+    console.log('[Login] Response:', response)
+    
+    const { signIn } = useAuth()
+    await signIn(
+      { username: state.name, password: state.password },
+      { callbackUrl: '/chat' }
+    )
   } catch (error: any) {
+    console.error('[Login] Error:', error)
     toast.add({
       title: t('auth.failedLoginTitle'),
-      description: error?.statusMessage || error,
+      description: error?.data?.statusMessage || error.statusMessage || error,
       color: 'red'
     })
   }
   loading.value = false
 }
 </script>
+
 <template>
   <ClientOnly>
     <UCard class="w-[400px] mx-auto">

@@ -1,16 +1,16 @@
 import { useStorage } from '@vueuse/core'
-import { DEFAULT_ATTACHED_MESSAGES_COUNT, MODEL_FAMILY_SEPARATOR } from '~/config'
+import { MODEL_FAMILY_SEPARATOR } from '~/config'
 
 export const chatDefaultSettings = useStorage<{
   models: string[]
-  attachedMessagesCount: number
   stripThinkSection: boolean
   skills: string[]
+  contextWindowSize: number
 }>('chat-default-settings', {
   models: [],
-  attachedMessagesCount: DEFAULT_ATTACHED_MESSAGES_COUNT,
   stripThinkSection: false,
   skills: [],
+  contextWindowSize: 10,
 })
 
 // incompatible with old data format
@@ -20,16 +20,16 @@ if (model) {
     const models = [model.concat().reverse().join(MODEL_FAMILY_SEPARATOR)]
     chatDefaultSettings.value = {
       models,
-      attachedMessagesCount: chatDefaultSettings.value.attachedMessagesCount || DEFAULT_ATTACHED_MESSAGES_COUNT,
       stripThinkSection: false,
       skills: [],
+      contextWindowSize: 10,
     }
   } else {
     chatDefaultSettings.value = {
       models: [],
-      attachedMessagesCount: DEFAULT_ATTACHED_MESSAGES_COUNT,
       stripThinkSection: false,
       skills: [],
+      contextWindowSize: 10,
     }
   }
 }

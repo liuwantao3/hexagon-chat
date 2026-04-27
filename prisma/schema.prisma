@@ -27,6 +27,12 @@ model User {
   knowledgeBases KnowledgeBase[]
   Story          Story[]
   LearningParagraph LearningParagraph[]
+  chatSessions   ChatSession[]
+  chatHistories  ChatHistory[]
+  wikiPages      WikiPage[]
+  wikiSources    WikiSource[]
+  wikiLogs       WikiLog[]
+  wikiConfigs    WikiConfig[]
 }
 
 model KnowledgeBase {
@@ -105,4 +111,179 @@ model SkillConfig {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, skillName])
+}
+
+model SessionSummary {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  sessionId       Int
+  summary         String
+  goals           String?
+  accomplishments String?
+  pendingTasks    String?
+  entities        String?   // JSON array
+  createdAt       DateTime  @default(now())
+
+  @@unique([sessionId])
+  @@index([userId])
+}
+
+model WikiSource {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  type         String    // "session" | "url" | "file" | "text"
+  sessionId    Int?      // if type="session"
+  title        String
+  content      String?   // extracted text / URL / file content
+  metadata     String?   // JSON: author, date, url, etc.
+  sourceHash   String?   // dedup check
+  ingestedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  user         User     @relation(fields: [userId], references: [id])
+  contributions WikiPageContribution[]
+
+  @@unique([userId, type, sessionId])
+  @@unique([userId, sourceHash])
+  @@index([userId, type])
+}
+
+model WikiPage {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  title        String
+  slug         String
+  content      String    // markdown body
+  category     String    // "entity" | "concept" | "topic" | "summary" | "comparison" | "investigation" | "source"
+  summary      String?   // one-line for index
+  frontmatter  String?   // JSON: tags, dates, confidence
+  sourceRefs   String?   // JSON array of source IDs (legacy)
+  updateReason String?   // "session_ingest" | "manual" | "lint" | "link_update"
+  confidence   Float     @default(0.5)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user           User                  @relation(fields: [userId], references: [id])
+  outgoingLinks  PageLink[]            @relation("SourcePage")
+  incomingLinks  PageLink[]            @relation("TargetPage")
+  contributions  WikiPageContribution[]
+
+  @@unique([userId, slug])
+  @@index([userId, category])
+  @@index([userId, updatedAt])
+}
+
+model WikiPageContribution {
+  id         Int      @id @default(autoincrement())
+  pageId     Int
+  sourceId   Int
+  weight     Float    @default(1.0)
+  createdAt  DateTime @default(now())
+
+  page   WikiPage  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  source WikiSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, sourceId])
+}
+
+model PageLink {
+  id           Int      @id @default(autoincrement())
+  sourcePageId Int
+  targetPageId Int
+  linkType     String   // "reference" | "see_also" | "contradicts" | "elaborates" | "supersedes" | "uses"
+  context      String?  // sentence where link appears
+  createdAt    DateTime @default(now())
+
+  sourcePage WikiPage @relation("SourcePage", fields: [sourcePageId], references: [id], onDelete: Cascade)
+  targetPage WikiPage @relation("TargetPage", fields: [targetPageId], references: [id], onDelete: Cascade)
+
+  @@unique([sourcePageId, targetPageId, linkType])
+  @@index([sourcePageId])
+  @@index([targetPageId])
+}
+
+model WikiLog {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  action      String    // "ingest" | "create_page" | "update_page" | "delete_page" | "link" | "lint" | "query"
+  actionData  String?   // JSON: sessionId, pageId, sourceId, details
+  description String
+  createdAt   DateTime  @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model WikiConfig {
+  id             Int       @id @default(autoincrement())
+  userId         Int       @unique
+  enabled        Boolean   @default(true)
+  autoIngest     Boolean   @default(true)
+  ingestHours    Int       @default(12)
+  summarizerModel String   @default("MiniMax-M2.5")
+  lastIngest     DateTime?
+  lastLint       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id])
+}
+
+model ChatSession {
+  id        Int       @id @default(autoincrement())
+  userId    Int?      // null for anonymous
+  anonymousId String? // device ID for anonymous users
+  title     String
+  createTime BigInt
+  updateTime BigInt
+  model     String?
+  modelFamily String?
+  models    String?   // JSON array
+  instructionId Int?
+  knowledgeBaseId Int?
+  attachedMessagesCount Int @default(0)
+  isTop     BigInt    @default(0)
+
+  user      User?     @relation(fields: [userId], references: [id])
+  messages  ChatHistory[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([anonymousId])
+  @@index([updateTime])
+}
+
+model ChatHistory {
+  id              Int       @id @default(autoincrement())
+  sessionId       Int
+  userId          Int?      // null for anonymous
+  anonymousId     String?   // device ID for anonymous users
+  message         String    // JSON string or plain text
+  startTime       BigInt
+  endTime         BigInt
+  model           String
+  role            String    // "user" | "assistant"
+  canceled        Boolean   @default(false)
+  failed          Boolean   @default(false)
+  instructionId   Int?
+  knowledgeBaseId Int?
+  relevantDocs    String?   // JSON array
+  toolResult      Boolean   @default(false)
+  toolCallId      String?
+  toolName        String?
+  toolInput       String?   // JSON
+  toolOutput      String?
+  toolCalls       String?   // JSON array
+
+  session         ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user            User?       @relation(fields: [userId], references: [id])
+
+  createdAt DateTime  @default(now())
+
+  @@index([sessionId])
+  @@index([userId])
+  @@index([anonymousId])
 }

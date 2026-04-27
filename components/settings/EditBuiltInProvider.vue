@@ -39,7 +39,6 @@ const formData = reactive({
   deploymentName: props.providerData?.deploymentName || '',
   models: props.providerData?.models?.join(', ') || '',
   chatModels: props.providerData?.chatSettings?.models?.join(', ') || '',
-  attachedMessagesCount: props.providerData?.chatSettings?.attachedMessagesCount || 10,
   secondaryKey: props.providerData?.secondary?.key || '',
   secondaryEndpoint: props.providerData?.secondary?.endpoint || '',
 })
@@ -66,7 +65,6 @@ function onSubmit() {
     models: models,
     chatSettings: {
       models: chatModels,
-      attachedMessagesCount: formData.attachedMessagesCount,
     },
   }
   
@@ -139,13 +137,6 @@ function onSubmit() {
           
           <UFormGroup :label="t('settings.defaultModel')" class="mb-4" :hint="t('global.optional')">
             <UInput v-model.trim="formData.chatModels" size="lg" placeholder="gpt-4o, gpt-3.5-turbo" />
-          </UFormGroup>
-          
-          <UFormGroup :label="t('chat.attachedMessagesCount')">
-            <div class="flex items-center">
-              <span class="mr-2 w-6 text-primary-500">{{ formData.attachedMessagesCount }}</span>
-              <URange v-model="formData.attachedMessagesCount" :min="0" :max="config.public.chatMaxAttachedMessages" size="md" />
-            </div>
           </UFormGroup>
         </div>
         

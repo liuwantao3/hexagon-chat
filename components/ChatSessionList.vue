@@ -8,15 +8,15 @@ const emits = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const createChatSession = useCreateChatSession()
+const { getSessions, createSession, updateSession, deleteSession } = useServerChat()
 const { isMobile } = useMediaBreakpoints()
 
-const sessionList = ref<ChatSession[]>([])
+const sessionList = ref<any[]>([])
 const currentSessionId = useStorage<number>('currentSessionId', 0)
 const confirm = useDialog('confirm')
 
 onMounted(async () => {
-  sessionList.value = await getSessionList()
+  await refreshSessionList()
 
   if (sessionList.value.length > 0) {
     if (currentSessionId.value === -1 || !sessionList.value.some(el => el.id === currentSessionId.value)) {
@@ -26,12 +26,21 @@ onMounted(async () => {
   }
 })
 
-defineExpose({ updateSessionInfo, createChat: onNewChat })
+defineExpose({ refreshSessionList, updateSessionInfo, createChat: onNewChat })
+
+async function refreshSessionList() {
+  const sessions = await getSessions()
+  sessionList.value = (sessions as any[]).map(s => ({
+    ...s,
+    isTop: s.isTop || 0
+  }))
+  sessionList.value = sortSessionList(sessionList.value)
+}
 
 async function onNewChat() {
-  const data = await createChatSession()
-  sessionList.value.unshift(data)
-  onSelectChat(sessionList.value[0].id!)
+  const result = await createSession(t('chat.newChat'))
+  sessionList.value.unshift({ ...result, isTop: 0, createTime: Date.now(), updateTime: Date.now() })
+  onSelectChat(result.id)
 }
 
 function onSelectChat(sessionId: number) {
@@ -39,27 +48,26 @@ function onSelectChat(sessionId: number) {
   emits('select', sessionId)
 }
 
-async function onTopChat(item: ChatSession, direction: string) {
-  // 设置clientDB中 chatSessions 的isTop字段为true
-  clientDB.chatSessions.update(item.id!, { isTop: direction == 'up' ? Date.now() : 0 })
-  sessionList.value = await getSessionList()
+async function onTopChat(item: any, direction: string) {
+  const isTop = direction == 'up' ? Date.now() : 0
+  await updateSession(item.id, { title: item.title })
+  item.isTop = isTop
+  await refreshSessionList()
 }
 
-function onDeleteChat(data: ChatSession) {
+async function onDeleteChat(data: any) {
   confirm(t("chat.deleteChatConfirm", [data.title || `${t("chat.newChat")} ${data.id}`]), {
     title: t('chat.deleteChat'),
     dangerouslyUseHTMLString: true,
   })
     .then(async () => {
-
-      const sessionId = data.id!
+      const sessionId = data.id
       sessionList.value = sessionList.value.filter(el => el.id !== sessionId)
-      await clientDB.chatSessions.where('id').equals(sessionId).delete()
-      await clientDB.chatHistories.where('sessionId').equals(sessionId).delete()
+      await deleteSession(sessionId)
 
       if (currentSessionId.value === sessionId) {
         if (sessionList.value.length > 0) {
-          onSelectChat(sessionList.value[0].id!)
+          onSelectChat(sessionList.value[0].id)
         } else {
           onSelectChat(0)
         }
@@ -68,20 +76,9 @@ function onDeleteChat(data: ChatSession) {
     .catch(noop)
 }
 
-async function getSessionList() {
-  const list: ChatSession[] = []
-  const result = await clientDB.chatSessions.orderBy('updateTime').reverse().toArray()
-
-  for (const item of result) {
-    list.push({ ...item, isTop: item.isTop || 0 })
-  }
-
-  return sortSessionList(list)
-}
-
-function sortSessionList(data: ChatSession[]) {
-  const pinTopList: ChatSession[] = []
-  const list: ChatSession[] = []
+function sortSessionList(data: any[]) {
+  const pinTopList: any[] = []
+  const list: any[] = []
 
   data.forEach(el => el.isTop > 0 ? pinTopList.push(el) : list.push(el))
   pinTopList.sort((a, b) => b.isTop - a.isTop)
@@ -89,28 +86,30 @@ function sortSessionList(data: ChatSession[]) {
   return [...pinTopList, ...list]
 }
 
-async function updateSessionInfo(data: Partial<Omit<ChatSession, 'id' | 'createTime'> & { forceUpdateTitle: boolean }>) {
-  const currentSession = sessionList.value.find(el => el.id === currentSessionId.value)!
-  let savedData: Partial<ChatSession>
+async function updateSessionInfo(data: { title?: string; forceUpdateTitle?: boolean; models?: string[] }) {
+  const currentSession = sessionList.value.find(el => el.id === currentSessionId.value)
+  if (!currentSession) return
 
-  if (data.title && (data.forceUpdateTitle || !currentSession.title)) {
-    savedData = omit(data, ['forceUpdateTitle'])
+  let savedData: any = { ...data }
+  if (!data.forceUpdateTitle) {
+    delete savedData.forceUpdateTitle
   } else {
-    savedData = omit(data, ['title', 'forceUpdateTitle'])
+    delete savedData.forceUpdateTitle
   }
 
   if (Object.keys(savedData).length > 0) {
     Object.assign(currentSession, savedData)
+    await updateSession(currentSessionId.value, savedData)
     sessionList.value = sortSessionList(sessionList.value)
-    await clientDB.chatSessions.where('id').equals(currentSessionId.value).modify(savedData)
   }
 }
 
-async function onRenameSession(item: ChatSession) {
+async function onRenameSession(item: any) {
   const newName = prompt('Enter a new name for the session:', item.title || `${t("chat.rename")} ${item.id}`)
-  // Convert `null` to `undefined`
   const title = newName === null ? undefined : newName
-  await updateSessionInfo({ title: title, forceUpdateTitle: true })
+  if (title !== undefined) {
+    await updateSessionInfo({ title, forceUpdateTitle: true })
+  }
 }
 
 </script>
@@ -131,10 +130,10 @@ async function onRenameSession(item: ChatSession) {
       <div v-for="item in sessionList" :key="item.id"
            class="session-item relative box-border p-2 cursor-pointer dark:text-gray-300 border-b border-b-gray-100 dark:border-b-gray-100/5 border-l-2"
            :class="[
-            item.isTop ? 'bg-primary-300/10 dark:bg-primary-800/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30',
-            currentSessionId === item.id ? 'border-l-pink-700/80 dark:border-l-pink-400/80' : 'border-l-transparent'
-          ]"
-           @click="onSelectChat(item.id!)">
+             item.isTop ? 'bg-primary-300/10 dark:bg-primary-800/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30',
+             currentSessionId === item.id ? 'border-l-pink-700/80 dark:border-l-pink-400/80' : 'border-l-transparent'
+           ]"
+           @click="onSelectChat(item.id)">
         <div class="w-full flex items-center text-sm h-[32px]">
           <div class="line-clamp-1 grow"
                :class="currentSessionId === item.id ? 'text-pink-700  dark:text-pink-400 font-bold' : 'opacity-80'">

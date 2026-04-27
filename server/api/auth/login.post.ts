@@ -3,6 +3,7 @@ import prisma from "@/server/utils/prisma"
 import jwt from "jsonwebtoken"
 import bcrypt from "bcrypt"
 import { Role } from './signup.post'
+import { chatService } from '~/server/services/chat'
 
 const refreshTokens: Record<number, Record<string, any>> = {}
 const SECRET = process.env.SECRET
@@ -63,6 +64,20 @@ export default eventHandler(async (event) => {
   refreshTokens[refreshToken] = {
     accessToken,
     user
+  }
+
+  // Merge anonymous sessions if anonymousId provided
+  const anonymousId = event.headers.get('x-anonymous-id')
+  console.log(`[Login] anonymousId from header: ${anonymousId}`)
+  if (anonymousId) {
+    try {
+      const mergedCount = await chatService.mergeAnonymousSessions(user.id, anonymousId)
+      console.log(`[Login] Merged ${mergedCount} sessions for user ${user.id}`)
+    } catch (e) {
+      console.error('[Login] Error merging anonymous data:', e)
+    }
+  } else {
+    console.log('[Login] No anonymousId header, skipping merge')
   }
 
   return {

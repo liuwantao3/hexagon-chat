@@ -168,12 +168,12 @@ async function respondToConfirm(response: 'confirmed' | 'denied') {
           />
         </div>
         
-        <div v-else-if="isHtmlToolResult" class="mt-2">
+        <div v-else-if="isHtmlToolResult" class="mt-2 overflow-x-auto">
           <iframe 
             v-for="(url, index) in parsedContent.htmlUrls" 
             :key="index"
             :src="url"
-            class="w-full h-96 rounded-lg border border-gray-300 dark:border-gray-600"
+            class="max-w-none w-[800px] h-[500px] rounded-lg border border-gray-300 dark:border-gray-600"
             sandbox="allow-scripts"
           />
         </div>

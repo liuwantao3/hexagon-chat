@@ -1,33 +1,43 @@
-interface ChatSessionBaseData extends Omit<ChatSession, 'id'> { }
+import type { ChatSession } from './clientDB'
+import { useModels } from './useModels'
+import { chatDefaultSettings } from './store'
+import { useDeviceId } from './useDeviceId'
+import { useServerChat } from './useServerChat'
 
 export function useCreateChatSession() {
   const { chatModels, loadModels } = useModels({ immediate: false })
   const { t } = useI18n()
   const toast = useToast()
+  const { createSession } = useServerChat()
 
-  return async function createChatSession(params?: Partial<Omit<ChatSessionBaseData, 'attachedMessagesCount' | 'createTime' | 'updateTime'>>) {
-    const baseData: ChatSessionBaseData = {
-      createTime: Date.now(),
-      updateTime: Date.now(),
-      title: params?.title || '',
-      models: params?.models || chatDefaultSettings.value.models,
-      instructionId: params?.instructionId || 0,
-      knowledgeBaseId: params?.knowledgeBaseId || 0,
-      attachedMessagesCount: chatDefaultSettings.value.attachedMessagesCount,
-      isTop: 0,
-    }
-
-    // set default model
+  return async function createChatSession(params?: {
+    title?: string
+    models?: string[]
+    instructionId?: number
+    knowledgeBaseId?: number
+  }) {
     await loadModels()
+    const models = params?.models || chatDefaultSettings.value.models
+    
     if (chatModels.value.length === 0) {
       toast.add({ title: t('chat.noModelFound'), description: t('chat.noModelFoundDesc'), color: 'red' })
-      baseData.models = undefined
     } else {
-      const availableModels = baseData.models?.filter(m => chatModels.value.some(cm => cm.value === m))
-      baseData.models = availableModels
+      const availableModels = models?.filter(m => chatModels.value.some(cm => cm.value === m))
+      params = { ...params, models: availableModels }
     }
 
-    const id = await clientDB.chatSessions.add(baseData)
-    return { ...baseData, id, count: 0 }
+    const result = await createSession('', {
+      model: params?.models?.[0],
+      models: params?.models,
+      instructionId: params?.instructionId,
+      knowledgeBaseId: params?.knowledgeBaseId
+    })
+    
+    return { 
+      ...result, 
+      attachedMessagesCount: chatDefaultSettings.value.attachedMessagesCount,
+      isTop: 0,
+      count: 0 
+    }
   }
 }

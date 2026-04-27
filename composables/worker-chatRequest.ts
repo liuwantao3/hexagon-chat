@@ -1,6 +1,6 @@
 import type { SetRequired } from 'type-fest'
 import type { ChatMessage } from '~/types/chat'
-import type { clientDB, ChatHistory } from '~/composables/clientDB'
+import type { ChatHistory } from '~/composables/clientDB'
 
 type RelevantDocument = Required<ChatHistory>['relevantDocs'][number]
 type ResponseRelevantDocument = { type: 'relevant_documents', relevant_documents: RelevantDocument[] }
@@ -15,6 +15,8 @@ interface RequestData {
   stream: boolean
   timestamp: number
   skills?: string[]
+  userId?: number
+  anonymousId?: string
 }
 
 export type WorkerReceivedMessage =
@@ -30,11 +32,6 @@ export type WorkerSendMessage = { uid: number, sessionId: number, id: number, } 
 )
 
 const MODEL_FAMILY_SEPARATOR = '/'
-
-let db: typeof clientDB
-import('~/composables/clientDB').then(mod => {
-  db = mod.clientDB
-})
 
 const abortHandlerMap = new Map<string /** sessionId:uid */, () => void>()
 
@@ -73,14 +70,9 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
       stream: data.stream,
       skills: data.skills,
       sessionId: data.sessionId,
+      userId: data.userId,
+      anonymousId: data.anonymousId,
     }),
-    // body: {
-    //   knowledgebaseId: data.knowledgebaseId,
-    //   model,
-    //   family,
-    //   messages: data.messages,
-    //   stream: data.stream,
-    // },
     headers: {
       ...headers,
       'Content-Type': 'application/json',
@@ -102,7 +94,7 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
       startTime: data.timestamp,
       endTime: Date.now(),
       toolResult: false
-    })
+    }, data.userId, data.anonymousId)
     sendMessageToMain({ uid, type: 'error', sessionId: data.sessionId, id, message: errInfo })
     sendMessageToMain({ id, uid, sessionId: data.sessionId, type: 'complete' })
   } else if (response.body) {
@@ -224,7 +216,7 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
             message: msgContent,
             failed: false,
             canceled: false,
-            startTime: data.timestamp,
+            startTime: Date.now(),
             endTime: Date.now(),
             toolResult: isToolResult,
             toolCallId: isToolResult ? chatMessage.message.toolCallId : undefined,
@@ -240,7 +232,13 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
           
           if (id === -1 || shouldCreateNew) {
             console.log('[Worker] Creating new message, isToolResult:', isToolResult, 'isNewIteration:', isNewIteration)
-            id = await addToDB(result)
+            // Only save tool results via addToDB - SSE already saves assistant messages directly
+            if (isToolResult) {
+              id = await addToDB(result, data.userId, data.anonymousId)
+            } else {
+              // For assistant messages, SSE handles DB save - just use a temp id for UI
+              id = Math.random()
+            }
           } else {
             // Update existing record for incremental content
             console.log('[Worker] Updating existing message, id:', id)
@@ -313,20 +311,48 @@ async function chatRequest(uid: number, data: RequestData, headers: Record<strin
   abortHandlerMap.delete(`${data.sessionId}:${uid}`)
 }
 
-async function addToDB(data: Omit<ChatHistory, 'id'>) {
-  return await db.chatHistories.add(data) as number
+async function addToDB(data: Omit<ChatHistory, 'id'>, userId?: number, anonymousId?: string) {
+  try {
+    const response = await fetch('/api/chat/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: data.sessionId,
+        userId,
+        anonymousId,
+        message: data.message,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        model: data.model,
+        role: data.role,
+        canceled: data.canceled,
+        failed: data.failed,
+        instructionId: data.instructionId,
+        knowledgeBaseId: data.knowledgeBaseId,
+        relevantDocs: data.relevantDocs,
+        toolResult: data.toolResult,
+        toolCallId: data.toolCallId,
+        toolName: data.toolName,
+        toolInput: data.toolInput,
+        toolOutput: data.toolOutput,
+        toolCalls: data.toolCalls,
+      })
+    })
+    if (!response.ok) {
+      console.error('[addToDB] Failed to save message:', response.statusText)
+      return Math.random()
+    }
+    const result = await response.json()
+    return result.id
+  } catch (error) {
+    console.error('[addToDB] Error:', error)
+    return Math.random()
+  }
 }
 
 async function updateToDB(data: SetRequired<Partial<ChatHistory>, 'id'>) {
-  await db.chatHistories.where('id')
-    .equals(data.id)
-    .modify({
-      relevantDocs: data.relevantDocs,
-      canceled: data.canceled,
-      failed: data.failed,
-      message: data.message,
-      endTime: Date.now(),
-    })
+  // Tool results don't need updating once created
+  console.log('[updateToDB] Called with id:', data.id, '(no-op for tool results)')
 }
 
 self.addEventListener('message', (e: MessageEvent<WorkerReceivedMessage>) => {

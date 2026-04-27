@@ -20,7 +20,7 @@ export const useSandbox = () => {
   const autoScreenshot = useStorage<boolean>('autoScreenshot', true)
   const includeConsole = useStorage<boolean>('includeConsole', true)
   const visionModel = useStorage<string>('visionModel', '')
-  const panelWidth = useStorage<number>('sandboxPanelWidth', 600)
+  const panelWidth = useStorage<number>('sandboxPanelWidth', 800)
   const consoleHeight = useStorage<number>('sandboxConsoleHeight', 200)
   const isPanelOpen = useStorage<boolean>('sandboxPanelOpen', false)
 

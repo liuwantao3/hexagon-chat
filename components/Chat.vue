@@ -10,6 +10,8 @@ import type { ChatMessage } from '~/types/chat'
 import { chatDefaultSettings } from '~/composables/store'
 import PptPreview from '~/components/PptPreview.vue'
 import { useSandbox } from '~/composables/useSandbox'
+import { useDeviceId } from '~/composables/useDeviceId'
+import { useServerChat } from '~/composables/useServerChat'
 
 type Instruction = Awaited<ReturnType<typeof loadOllamaInstructions>>[number]
 
@@ -22,13 +24,20 @@ const emits = defineEmits<{
   message: [data: ChatMessage | null]
   changeSettings: [data: ChatSessionSettings]
   'toggle-sidebar': []
+  'update-session': [sessionId: number, data: Partial<ChatSession>]
 }>()
 
 const { t } = useI18n()
 const { chatModels, modelSupportsVision } = useModels()
 const modal = useModal()
 const { onReceivedMessage, sendMessage } = useChatWorker()
-const { data } = useAuth()
+const { data, signOut } = useAuth()
+const { deviceId } = useDeviceId()
+const serverChat = useServerChat()
+
+const currentUserId = computed(() => data.value?.id)
+
+console.log('[Chat] Auth data:', data.value, 'deviceId:', deviceId.value)
 
 const supportsVision = computed(() => {
   if (models.value.length === 0) return false
@@ -49,7 +58,7 @@ const messageListEl = shallowRef<HTMLElement>()
 const behavior = ref<ScrollBehavior>('auto')
 const { y } = useScroll(messageListEl, { behavior })
 const isFirstLoad = ref(true)
-const limitHistorySize = computed(() => Math.max(sessionInfo.value?.attachedMessagesCount || 0, 20))
+const limitHistorySize = computed(() => chatDefaultSettings.value.contextWindowSize || 10)
 
 const isUserScrolling = computed(() => {
   if (isFirstLoad.value) return false
@@ -69,7 +78,11 @@ const scrollToBottom = (_behavior: ScrollBehavior) => {
 }
 
 const visibleMessages = computed(() => {
-  return messages.value.filter((message) => message.role !== 'system')
+  return messages.value.filter((message) => {
+    if (message.role === 'system') return false
+    if (message.silent) return false
+    return true
+  })
 })
 
 // Add new state for stripping <think> section
@@ -258,21 +271,15 @@ useMutationObserver(messageListEl, useThrottleFn((e: MutationRecord[]) => {
 
 async function loadChatHistory(sessionId?: number) {
   if (typeof sessionId === 'number' && sessionId > 0) {
-    const res = await clientDB.chatHistories.where('sessionId').equals(sessionId).sortBy('id')
-    // Retrieve chat history based on both userId and sessionId
-    // const res = await clientDB.chatHistories
-    //   .where('[userId+sessionId]')
-    //   .equals([userId, sessionId])
-    //   .sortBy('id')
+    const res = await serverChat.getSessionMessages(sessionId)
 
-    return res.slice(-limitHistorySize.value).map(el => {
-      // Infer role from toolResult flag for records that don't have proper role
+    const filtered = (res as any[]).slice(-limitHistorySize.value).map(el => {
       const inferredRole = el.toolResult === true ? 'user' : (el.role || 'assistant')
       return {
         id: el.id,
         content: el.message,
         role: inferredRole,
-        model: el.model,
+        model: el.model || '',
         startTime: el.startTime || 0,
         endTime: el.endTime || 0,
         type: el.canceled ? 'canceled' : (el.failed ? 'error' : undefined),
@@ -283,8 +290,18 @@ async function loadChatHistory(sessionId?: number) {
         toolInput: el.toolInput,
         toolOutput: el.toolOutput,
         toolCalls: el.toolCalls,
+        silent: !!el.silent,
       } as const
+    }).filter(el => {
+      if (el.silent) return false
+      if (typeof el.content === 'string' && el.content.startsWith('[User Action]')) return false
+      return true
     })
+
+    filtered.sort((a, b) => (a.id || 0) - (b.id || 0))
+    console.log('[loadChatHistory] FINAL messages:')
+    filtered.forEach((m, i) => console.log(`  [${i}] role:${m.role} model:'${m.model}' toolResult:${m.toolResult} content:${String(m.content).substring(0, 30)}`))
+    return filtered
   }
   return []
 }
@@ -348,7 +365,7 @@ const onSend = async (data: ChatBoxFormData) => {
           if (m.type === 'error' || m.type === 'canceled')
             return false
           return m.role === 'user' || (m.role === 'assistant' && (m.model === model.value || (model.value === `${(m as any).family}/${m.model}` /* incompatible old data */)))
-        }).slice(-(sessionInfo.value?.attachedMessagesCount || 1)),
+        }).slice(-(chatDefaultSettings.value.contextWindowSize || 10)),
       ].flat()
       messages.value.push({ id, role: "assistant", content: "", type: 'loading', startTime: timestamp, endTime: timestamp, model: model.value })
 
@@ -362,9 +379,83 @@ const onSend = async (data: ChatBoxFormData) => {
           messages: chatMessages,
           stream: isStream,
           sessionId: sessionInfo.value!.id!,
-          //sessionId: sessionInfo.value?.id ?? null,
           timestamp,
           skills: selectedSkills.value,
+          userId: currentUserId.value,
+          anonymousId: currentUserId.value ? undefined : deviceId.value,
+        },
+      })
+      console.log('[Chat] Sending to worker - data:', data, 'data.value:', data?.value, 'userId:', currentUserId.value, 'deviceId:', deviceId.value)
+    }
+  })
+}
+
+const sendSilentInteraction = (interaction: { event: string, tag?: string, id?: string, text?: string, value?: string }) => {
+  if (!sessionInfo.value?.id || sendingCount.value > 0 || !models.value.length) {
+    console.log('[Chat] Skipping silent interaction - no session or already sending')
+    return
+  }
+
+  const timestamp = Date.now()
+
+  const formatInteraction = () => {
+    switch (interaction.event) {
+      case 'click':
+        return `[User Action] Clicked: ${interaction.tag}${interaction.id ? '#' + interaction.id : ''}${interaction.text ? ' "' + interaction.text + '"' : ''}`
+      case 'input':
+        return `[User Action] Input: ${interaction.tag}${interaction.id ? '#' + interaction.id : ''}${interaction.value ? ' "' + interaction.value + '"' : ''}`
+      case 'submit':
+        return `[User Action] Submitted: ${interaction.tag || 'form'}${interaction.id ? '#' + interaction.id : ''}`
+      default:
+        return `[User Action] ${interaction.event}`
+    }
+  }
+
+  const content = formatInteraction()
+  console.log('[Chat] Sending silent interaction:', content)
+
+  sendingCount.value = models.value.length
+
+  const silentUserMessage = {
+    id: Math.random(),
+    role: 'user' as const,
+    content,
+    silent: true,
+    model: models.value.join(',') || '',
+    startTime: timestamp,
+    endTime: timestamp,
+    toolResult: false,
+  }
+  messages.value.push(silentUserMessage)
+
+  models.value.forEach(m => {
+    const model = chatModels.value.find(e => e.value === m)
+    if (model) {
+      const id = Math.random()
+      const chatMessages = [
+        messages.value.filter(m => {
+          if (m.type === 'error' || m.type === 'canceled')
+            return false
+          return m.role === 'user' || (m.role === 'assistant' && (m.model === model.value || (model.value === `${(m as any).family}/${m.model}`)))
+        }).slice(-(chatDefaultSettings.value.contextWindowSize || 10)),
+      ].flat()
+
+      messages.value.push({ id, role: "assistant", content: "", type: 'loading', startTime: timestamp, endTime: timestamp, model: model.value })
+
+      sendMessage({
+        type: 'request',
+        uid: id,
+        headers: getKeysHeader(),
+        data: {
+          knowledgebaseId: knowledgeBaseInfo.value?.id,
+          model: model.value,
+          messages: chatMessages,
+          stream: true,
+          sessionId: sessionInfo.value!.id!,
+          timestamp,
+          skills: selectedSkills.value,
+          userId: currentUserId.value,
+          anonymousId: currentUserId.value ? undefined : deviceId.value,
         },
       })
     }
@@ -428,21 +519,56 @@ onMounted(async () => {
       knowledgeBases.push(...res2)
     })
   initData(props.sessionId)
+
+  sandbox.onInteraction((interaction) => {
+    console.log('[Chat] Sandbox interaction received from panel:', interaction)
+    sendSilentInteraction(interaction)
+  })
+
+  window.addEventListener('message', handleWindowMessage)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('message', handleWindowMessage)
+})
+
+function handleWindowMessage(event: MessageEvent) {
+  if (event.data?.type === 'sandbox-interaction') {
+    sendSilentInteraction(event.data)
+  }
+}
 
 function updateMessage(data: WorkerSendMessage, newData: Partial<ChatMessage>) {
   const isToolResult = newData.toolResult === true
-  const isAssistantWithToolCalls = newData.toolCalls && newData.toolCalls.length > 0
 
   if (isToolResult) {
-    console.log('[Chat] updateMessage - tool result, pushing new message, id:', data.id, 'role:', newData.role)
+    const existingIndex = messages.value.findIndex(m => m.toolCallId === newData.toolCallId)
+    if (existingIndex > -1) {
+      return
+    }
     messages.value.push(newData as ChatMessage)
     return
   }
 
+  if (data.id && data.id > 0) {
+    const existingIndex = messages.value.findIndex(m => m.id === data.id)
+    if (existingIndex > -1) {
+      return
+    }
+  }
+
+  if (newData.content && typeof newData.content === 'string') {
+    const contentMatch = messages.value.findIndex(m => 
+      m.role === 'assistant' && 
+      m.content === newData.content
+    )
+    if (contentMatch > -1) {
+      return
+    }
+  }
+
   const index = 'id' in data ? messages.value.findIndex(el => el.id === data.uid || el.id === data.id) : -1
   if (index > -1) {
-    console.log('[Chat] updateMessage - updating existing, id:', data.id, 'index:', index)
     messages.value.splice(index, 1, { ...messages.value[index], ...newData })
   } else {
     console.log('[Chat] updateMessage - pushing new, id:', data.id, 'role:', newData.role)
@@ -462,7 +588,6 @@ function onOpenSettings() {
     onUpdated: data => {
       const updatedSessionInfo: Partial<ChatSession> = {
         title: data.title,
-        attachedMessagesCount: data.attachedMessagesCount,
         knowledgeBaseId: data.knowledgeBaseInfo?.id,
         instructionId: data.instructionInfo?.id,
       }
@@ -480,7 +605,7 @@ function onOpenSettings() {
 }
 
 async function onModelsChange(models: string[]) {
-  await clientDB.chatSessions.update(props.sessionId!, { models })
+  await serverChat.updateSession(props.sessionId!, { models })
 }
 
 async function onResend(data: ChatMessage) {
@@ -499,32 +624,27 @@ async function onResend(data: ChatMessage) {
 }
 
 async function onRemove(data: ChatMessage) {
-  await clientDB.chatHistories.where('id').equals(data.id!).delete()
+  // Note: Delete message API would need to be implemented
+  // For now, just remove from local state
   messages.value = messages.value.filter(el => el.id !== data.id)
   emits('message', null)
 }
 
 async function initData(sessionId?: number) {
-
-  const { data } = useAuth()
-  const userId = data.value?.id
-
-  //if (typeof sessionId !== 'number' || !userId) return
   if (typeof sessionId !== 'number') return
 
-  const result = await clientDB.chatSessions.get(sessionId)
+  const sessions = await serverChat.getSessions()
+  const result = (sessions as any[]).find(s => s.id === sessionId)
   sessionInfo.value = result
   knowledgeBaseInfo.value = knowledgeBases.find(el => el.id === result?.knowledgeBaseId)
   instructionInfo.value = instructions.find(el => el.id === result?.instructionId)
   if (result?.models) {
     models.value = result.models
   }
-  // incompatible old data
   else if (result?.model) {
     models.value = [`${result.modelFamily}/${result.model}`]
   }
 
-  //messages.value = await loadChatHistory(userId, sessionId)
   messages.value = await loadChatHistory(sessionId)
 
   nextTick(() => {
@@ -533,18 +653,10 @@ async function initData(sessionId?: number) {
   })
 }
 
-// async function saveMessage(data: Omit<ChatHistory, 'sessionId'>) {
-//   return props.sessionId
-//     ? await clientDB.chatHistories.add({ ...data, sessionId: props.sessionId })
-//     : Math.random()
-// }
-
 async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
-  const { data: authData } = useAuth()
-  const userId = authData.value?.id ?? null // Use the 'id' field as the user identifier
-  return props.sessionId
-    ? await clientDB.chatHistories.add({ ...data, sessionId: props.sessionId, userId })
-    : Math.random()
+  // Messages are now saved via worker-chatRequest
+  // This function kept for compatibility but messages are saved server-side
+  return props.sessionId || Math.random()
 }
 
 // Add near the top of the script section
@@ -645,12 +757,7 @@ async function saveMessage(data: Omit<ChatHistory, 'sessionId' | 'userId'>) {
                 </div>
               </template>
             </UPopover>
-            <UTooltip :text="t('chat.attachedMessagesCount')" :popper="{ placement: 'top-start' }">
-              <div class="flex items-center cursor-pointer hover:text-primary-400" @click="onOpenSettings">
-                <UIcon name="i-material-symbols-history" class="mr-1"></UIcon>
-                <span class="text-sm">{{ sessionInfo?.attachedMessagesCount }}</span>
-              </div>
-            </UTooltip>
+            
             <UTooltip text="Settings" :popper="{ placement: 'top-start' }">
               <UButton icon="i-heroicons-cog-6-tooth" color="gray" variant="ghost" to="/settings" class="ml-2" />
             </UTooltip>

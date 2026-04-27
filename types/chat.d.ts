@@ -13,6 +13,7 @@ export interface ChatMessage {
   toolInput?: any
   toolOutput?: string
   toolCalls?: Array<{ name: string, args: any }>
+  silent?: boolean  // If true, message is not rendered but sent to LLM context
 }
 
 interface TextContent {

@@ -21,7 +21,17 @@ const closeConfigureSkill = () => {
       <SettingsServers />
     </div>
     <div class="mb-4">
+      <ClientOnly>
+        <SettingsChatSettings />
+      </ClientOnly>
+    </div>
+    <div class="mb-4">
       <SettingsSandbox />
+    </div>
+    <div class="mb-4">
+      <ClientOnly>
+        <SettingsWikiSettings />
+      </ClientOnly>
     </div>
     <div class="mb-4">
       <SettingsLanguageSelectMenu />

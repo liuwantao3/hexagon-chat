@@ -1,6 +1,7 @@
 {
   "common": {
-    "selectModel": "Select model"
+    "selectModel": "Select model",
+    "loading": "Loading..."
   },
   "menu": {
     "home": "Home",
@@ -150,6 +151,7 @@
     "proxyTips": "Only works when the current Endpoint and Proxy Settings is set",
     "chatSettings": "Chat Settings",
     "defaultModel": "Default Model",
+    "contextWindowSize": "Context Window Size",
     "secondaryApi": "Secondary API (Fallback)",
     "secondaryApiKey": "Secondary API Key",
     "secondaryApiKeyPlaceholder": "Enter secondary API key",
@@ -183,6 +185,17 @@
       "close": "Close",
       "clearConsole": "Clear",
       "noLogs": "No console output"
+    },
+    "wiki": {
+      "title": "LLM Wiki",
+      "enableWiki": "Enable Wiki",
+      "enableWikiDesc": "Store and retrieve knowledge from previous sessions",
+      "autoIngest": "Auto Ingest",
+      "autoIngestDesc": "Automatically ingest sessions daily",
+      "totalPages": "Total Pages",
+      "lastIngest": "Last Ingest",
+      "byCategory": "By Category",
+      "runLint": "Run Health Check"
     }
   },
   "auth": {

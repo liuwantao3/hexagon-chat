@@ -1,22 +1,11 @@
 import { tryParseJson } from '~/composables/utils'
+import type { SkillConfigField, SkillConfigSchema } from '~/server/skills/types'
+
+export type { SkillConfigField, SkillConfigSchema }
 
 export interface ChatSettings {
   models: string[]
   attachedMessagesCount: number
-}
-
-export interface SkillConfigField {
-  key: string
-  type: 'password' | 'text' | 'select' | 'toggle'
-  label: string
-  required?: boolean
-  placeholder?: string
-  options?: string[]
-  default?: string | boolean
-}
-
-export interface SkillConfigSchema {
-  fields: SkillConfigField[]
 }
 
 export interface SkillConfigs {

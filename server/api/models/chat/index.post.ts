@@ -25,6 +25,7 @@ import { transformImageContent } from '@/server/utils/transformImageContent'
 import type { ContextKeys } from '~/server/middleware/keys'
 import type { H3Event } from 'h3'
 import { skillLoader, setSkillConfigs } from '@/server/skills'
+import { wikiService } from '@/server/services/wiki'
 
 // Handle confirm tool - returns confirmation prompt for UI to display
 async function handleConfirmTool(toolCall: any, toolArgs: any, sessionId: number) {
@@ -220,6 +221,8 @@ interface RequestBody {
     stream: any
     skills?: string[]
     sessionId?: number
+    userId?: number
+    anonymousId?: string
 }
 
 const SYSTEM_TEMPLATE = `Answer the user's question based on the context below.
@@ -269,10 +272,62 @@ const normalizeMessages = (messages: RequestBody['messages']): BaseMessage[] => 
 }
 
 export default defineEventHandler(async (event) => {
+    console.log('🔵 ======================================== [CHAT-API-START] ========================================')
     try {
-        const { knowledgebaseId, model, family, messages, stream, skills, sessionId } = await readBody<RequestBody>(event)
+        const body = await readBody(event)
+        const { knowledgebaseId, model, family, messages, stream, skills, sessionId, userId, anonymousId } = body
 
-        console.log("model family stream", model, family, stream, "sessionId:", sessionId)
+        console.log('🔵 [CHAT-API] body keys:', Object.keys(body))
+        console.log('🔵 [CHAT-API] sessionId:', sessionId, 'userId:', userId, 'anonymousId:', anonymousId)
+        
+        // Save user message to database
+        console.log('🔵 [CHAT-API] Checking save - sessionId:', sessionId, 'userId:', userId, 'anonymousId:', anonymousId)
+        
+        // Try to save user message - use session info if no user info
+        if (sessionId) {
+            const lastMessage = messages?.filter(m => m.role === 'user').pop()
+            console.log('🔵 [CHAT-API] User message:', lastMessage?.content?.substring(0, 50))
+            if (lastMessage) {
+                const now = Date.now()
+                try {
+                    await prisma.chatHistory.create({
+                        data: {
+                            sessionId,
+                            userId: userId || null,
+                            anonymousId: anonymousId || null,
+                            message: lastMessage.content,
+                            startTime: BigInt(now),
+                            endTime: BigInt(now),
+                            model,
+                            role: 'user',
+                            canceled: false,
+                            failed: false,
+                            instructionId: null,
+                            knowledgeBaseId: knowledgebaseId ? parseInt(knowledgebaseId) : null,
+                            toolResult: false
+                        }
+                    })
+                    const existingSession = await prisma.chatSession.findUnique({ where: { id: sessionId }, select: { title: true } })
+                    const needsTitle = existingSession?.title === null || existingSession?.title === 'New Chat'
+                    console.log('🔵 [CHAT-API] existingSession:', existingSession, 'needsTitle:', needsTitle)
+                    const titleUpdate = needsTitle ? { title: lastMessage.content.substring(0, 50) } : {}
+                    console.log('🔵 [CHAT-API] Title update:', titleUpdate)
+                    
+                    await prisma.chatSession.update({
+                        where: { id: sessionId },
+                        data: {
+                            updateTime: BigInt(now),
+                            attachedMessagesCount: { increment: 1 },
+                            ...titleUpdate
+                        }
+                    })
+                    console.log('🔵 [CHAT-API] User message saved')
+                } catch (e) {
+                    console.log('🔵 [CHAT-API] Failed to save user message:', e)
+                }
+            }
+        }
+        
         if (knowledgebaseId) {
             console.log("Chat with knowledge base with id: ", knowledgebaseId)
             const knowledgebase = await prisma.knowledgeBase.findUnique({
@@ -435,16 +490,42 @@ export default defineEventHandler(async (event) => {
             // Clean messages before using them
             const messagesForLLM = cleanMessagesForLLM(messages)
             
+            // Inject wiki context if enabled
+            let wikiContext = ''
+            if (userId) {
+                try {
+                    const config = await wikiService.getOrCreateConfig(userId)
+                    if (config.enabled) {
+                        const lastUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0]?.content || ''
+                        if (lastUserMessage) {
+                            const relevantPages = await wikiService.searchPages({
+                                userId,
+                                query: lastUserMessage,
+                                limit: 5
+                            })
+                            if (relevantPages.length > 0) {
+                                wikiContext = relevantPages.map(p =>
+                                    `[${p.category}] ${p.title}: ${(p.summary || p.content).substring(0, 200)}`
+                                ).join('\n')
+                                console.log('[Wiki] Injected', relevantPages.length, 'pages')
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[Wiki] Error injecting context:', e)
+                }
+            }
+            
             let finalMessages = messagesForLLM
             if (toolsToUse.length > 0) {
                 const toolDescriptions = toolsToUse.map(t => t.name + ': ' + t.description).join(', ')
-                const codeAgentSystemPrompt = `You have access to tools. Use them to accomplish the user's task.
-After tools execute successfully, provide your final answer to the user. Do NOT call tools repeatedly for the same task.
-
-Available tools: ${toolDescriptions}`
+                let systemContent = 'You have access to tools. Use them to accomplish the user\'s task.\nAfter tools execute successfully, provide your final answer to the user. Do NOT call tools repeatedly for the same task.\n\nAvailable tools: ' + toolDescriptions
+                if (wikiContext) {
+                    systemContent = systemContent + '\n\n## Relevant Context from Previous Sessions\n' + wikiContext + '\n\n---\n'
+                }
 
                 finalMessages = [
-                    { role: 'system', content: codeAgentSystemPrompt, toolCallId: '', toolResult: false },
+                    { role: 'system', content: systemContent, toolCallId: '', toolResult: false },
                     ...messagesForLLM
                 ]
             } else if (skillSystemPrompt) {
@@ -452,14 +533,25 @@ Available tools: ${toolDescriptions}`
                 const systemMessages = messagesForLLM.filter(m => m.role === 'system')
                 const nonSystemMessages = messagesForLLM.filter(m => m.role !== 'system')
 
-                const combinedSystemPrompt = skillSystemPrompt
+                let combinedSystemPrompt = skillSystemPrompt
+                if (wikiContext) {
+                    combinedSystemPrompt = combinedSystemPrompt + '\n\n## Relevant Context from Previous Sessions\n' + wikiContext + '\n\n---\n'
+                }
 
                 finalMessages = [
                     { role: 'system', content: combinedSystemPrompt, toolCallId: '', toolResult: false },
                     ...systemMessages,
                     ...nonSystemMessages
                 ]
-}
+            } else {
+                // No tools or skills - just chat with wiki context
+                if (wikiContext) {
+                    finalMessages = [
+                        { role: 'system', content: `## Relevant Context from Previous Sessions\n${wikiContext}\n\n---\n\nYou have context from previous sessions that may be helpful. Use it when relevant.`, toolCallId: '', toolResult: false },
+                        ...messagesForLLM
+                    ]
+                }
+            }
 
             console.log('[Skills] Final messages count:', messagesForLLM.length)
             console.log('[Skills] Loaded skills:', skills, 'with', skillTools.length, 'tools')
@@ -813,6 +905,39 @@ for (const toolCall of toolCalls) {
                                         ? finalContent.substring(0, 200) 
                                         : '(no content)'
                                     console.log('[Chat] EXITING LOOP - iteration:', iteration, 'content:', contentForLog)
+                                    
+                                    // Save assistant message to database
+                                    if (sessionId && (userId || anonymousId) && finalContent) {
+                                        const now = Date.now()
+                                        try {
+                                            await prisma.chatHistory.create({
+                                                data: {
+                                                    sessionId,
+                                                    userId: userId || null,
+                                                    anonymousId: anonymousId || null,
+                                                    message: finalContent,
+                                                    startTime: BigInt(now - 1000),
+                                                    endTime: BigInt(now),
+                                                    model,
+                                                    role: 'assistant',
+                                                    canceled: false,
+                                                    failed: false,
+                                                    toolResult: false
+                                                }
+                                            })
+                                            await prisma.chatSession.update({
+                                                where: { id: sessionId },
+                                                data: {
+                                                    updateTime: BigInt(now),
+                                                    attachedMessagesCount: { increment: 1 }
+                                                }
+                                            })
+                                            console.log('[Chat] Assistant message saved to DB')
+                                        } catch (e) {
+                                            console.log('[Chat] Failed to save assistant message:', e)
+                                        }
+                                    }
+                                    
                                     // Send a completion signal by yielding a special message
                                     yield `${JSON.stringify({ type: 'flow_complete' })} \n\n`
                                 }

@@ -150,6 +150,7 @@
     "proxyTips": "仅当设置了当前端点和代理设置时才有效",
     "chatSettings": "对话设置",
     "defaultModel": "默认模型",
+    "contextWindowSize": "上下文窗口大小",
     "secondaryApi": "备用 API (失败时切换)",
     "secondaryApiKey": "备用 API 密钥",
     "secondaryApiKeyPlaceholder": "输入备用 API 密钥",

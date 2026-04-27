@@ -10,10 +10,10 @@ const { t } = useI18n()
       <UFormGroup :label="t('settings.defaultModel')" class="mb-4">
         <ModelsMultiSelectMenu v-model="chatDefaultSettings.models" size="lg"></ModelsMultiSelectMenu>
       </UFormGroup>
-      <UFormGroup :label="t('chat.attachedMessagesCount')">
+      <UFormGroup :label="t('settings.contextWindowSize')">
         <div class="flex items-center">
-          <span class="mr-2 w-6 text-primary-500">{{ chatDefaultSettings.attachedMessagesCount }}</span>
-          <URange v-model="chatDefaultSettings.attachedMessagesCount" :min="0" :max="$config.public.chatMaxAttachedMessages" size="md" />
+          <span class="mr-2 w-6 text-primary-500">{{ chatDefaultSettings.contextWindowSize }}</span>
+          <URange v-model="chatDefaultSettings.contextWindowSize" :min="5" :max="50" size="md" />
         </div>
       </UFormGroup>
     </SettingsCard>

@@ -12,6 +12,7 @@ definePageMeta({
 export interface ChatSessionSettings extends Partial<Omit<ChatSession, 'id' | 'createTime'>> { }
 
 const { t } = useI18n()
+const { data: authData } = useAuth()
 const chatSessionListRef = shallowRef<ComponentInstance<typeof ChatSessionList>>()
 const chatRef = shallowRef<ComponentInstance<typeof Chat>>()
 const slideover = useSlideover()
@@ -29,14 +30,14 @@ watch(isMobile, val => {
 })
 
 function onChangeSettings(data: ChatSessionSettings) {
-    chatSessionListRef.value?.updateSessionInfo({ ...data, forceUpdateTitle: true })
+    chatSessionListRef.value?.updateSessionInfo({ ...data })
 }
 
 function onMessage(data: ChatMessage | null) {
     if (data === null) return
 
+    // Only update non-title fields, let server handle title
     chatSessionListRef.value?.updateSessionInfo({
-        title: data.content.slice(0, 20),
         updateTime: data.endTime || data.startTime,
     })
 
@@ -65,6 +66,10 @@ function onOpenSideMenu() {
     })
 }
 
+function onUpdateSession(sessionId: number, data: Partial<ChatSession>) {
+    chatSessionListRef.value?.refreshSessionList()
+}
+
 function toggleSidebar() {
     isSessionListVisible.value = !isSessionListVisible.value
 }
@@ -79,6 +84,7 @@ provide('isSessionListVisible', isSessionListVisible)
                              ref="chatSessionListRef"
                              class="session-list"
                              :class="{ 'hidden': !isSessionListVisible }"
+                             :key="authData?.id || 'anonymous'"
                              @select="onChangeChatSession" />
         </ClientOnly>
         <Chat
@@ -93,7 +99,8 @@ provide('isSessionListVisible', isSessionListVisible)
               :session-id="sessionId"
               @change-settings="onChangeSettings"
               @message="onMessage"
-              @toggle-sidebar="toggleSidebar">
+              @toggle-sidebar="toggleSidebar"
+              @update-session="onUpdateSession">
             <template #left-menu-btn>
                 <UButton
                          :icon="isSessionListVisible ? 'i-heroicons-chevron-double-left' : 'i-heroicons-chevron-double-right'"
@@ -164,7 +171,7 @@ provide('isSessionListVisible', isSessionListVisible)
 }
 
 .chat.with-sandbox {
-    width: calc(100% - var(--sandbox-width, 600px));
+    width: calc(100% - var(--sandbox-width, 800px));
 }
 
 .sandbox-panel {
@@ -172,7 +179,7 @@ provide('isSessionListVisible', isSessionListVisible)
     right: 0;
     top: 0;
     bottom: 0;
-    width: var(--sandbox-width, 600px);
+    width: var(--sandbox-width, 800px);
     z-index: 10;
 }
 
@@ -181,7 +188,7 @@ provide('isSessionListVisible', isSessionListVisible)
     right: 0;
     top: 0;
     bottom: 0;
-    width: var(--sandbox-width, 600px);
+    width: var(--sandbox-width, 800px);
     z-index: 10;
     visibility: hidden;
     pointer-events: none;
