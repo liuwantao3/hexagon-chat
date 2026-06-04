@@ -28,6 +28,7 @@ const providers: Record<string, ProviderConfig> = {
   minimax: { key: 'minimax', label: 'MiniMax', defaultEndpoint: 'https://api.minimax.chat/v1', supportsProxy: true, needsModels: true },
   gemini: { key: 'gemini', label: 'Gemini', defaultEndpoint: '', supportsProxy: true },
   groq: { key: 'groq', label: 'Groq', defaultEndpoint: '', supportsProxy: true },
+  opencodeGo: { key: 'opencodeGo', label: 'OpenCode Go', defaultEndpoint: 'https://opencode.ai/zen/go/v1', supportsProxy: true },
 }
 
 const provider = computed(() => providers[props.providerKey] || providers.openai)

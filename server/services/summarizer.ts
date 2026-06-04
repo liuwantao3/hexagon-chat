@@ -90,14 +90,30 @@ class SummarizerService {
   }
 
   private extractJSONFromResponse(content: string): any {
+    let cleanContent = content
+
+    const thinkEndIndex = cleanContent.indexOf('</think>')
+    if (thinkEndIndex !== -1) {
+      cleanContent = cleanContent.substring(thinkEndIndex + 6)
+    }
+
+    const codeBlockMatch = cleanContent.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+    if (codeBlockMatch) {
+      try {
+        return JSON.parse(codeBlockMatch[1])
+      } catch (e) {
+        console.warn('[Summarizer] JSON parse from code block failed:', e)
+      }
+    }
+
     try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      const jsonMatch = cleanContent.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0])
       }
     } catch (e) {
       try {
-        const cleaned = content.replace(/[\x00-\x1F\x7F]/g, '')
+        const cleaned = cleanContent.replace(/[\x00-\x1F\x7F]/g, '')
         const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
         if (jsonMatch) {
           return JSON.parse(jsonMatch[0])

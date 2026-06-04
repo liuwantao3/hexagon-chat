@@ -1,4 +1,5 @@
 import { useDeviceId } from './useDeviceId'
+import { $fetchWithAuth } from './fetchWithAuth'
 
 export function useServerChat() {
   const { data } = useAuth()
@@ -10,11 +11,10 @@ export function useServerChat() {
   async function getSessions() {
     const id = userId.value
     const anonId = anonymousId.value
-    
-    // Always send both userId and anonymousId to support all scenarios
-    return await $fetch('/api/chat/sessions', {
-      query: { 
-        userId: id || undefined, 
+
+    return await $fetchWithAuth('/api/chat/sessions', {
+      query: {
+        userId: id || undefined,
         anonymousId: anonId || undefined
       }
     })
@@ -28,8 +28,8 @@ export function useServerChat() {
   }) {
     const id = userId.value
     const anonId = anonymousId.value
-    
-    const result = await $fetch('/api/chat/sessions', {
+
+    const result = await $fetchWithAuth('/api/chat/sessions', {
       method: 'POST',
       body: {
         userId: id || undefined,
@@ -41,22 +41,28 @@ export function useServerChat() {
     return result
   }
 
-  async function getSessionMessages(sessionId: number) {
+  async function getSessionMessages(sessionId: number, params?: { take?: number, cursor?: number, orderBy?: 'asc' | 'desc' }) {
     const id = userId.value
     const anonId = anonymousId.value
-    
-    return await $fetch(`/api/chat/${sessionId}/messages`, {
-      query: { 
+
+    const res = await $fetchWithAuth(`/api/chat/${sessionId}/messages`, {
+      query: {
         userId: id || undefined,
-        anonymousId: anonId || undefined
+        anonymousId: anonId || undefined,
+        ...params
       }
     })
+
+    if (res && typeof res === 'object' && 'messages' in res) {
+      return (res as any).messages
+    }
+    return res
   }
 
   async function updateSession(sessionId: number, data: { title?: string, models?: string[] }) {
-    return await $fetch(`/api/chat/${sessionId}`, {
+    return await $fetchWithAuth(`/api/chat/${sessionId}`, {
       method: 'PUT',
-      query: { 
+      query: {
         userId: userId.value || undefined,
         anonymousId: anonymousId.value || undefined
       },
@@ -65,9 +71,9 @@ export function useServerChat() {
   }
 
   async function deleteSession(sessionId: number) {
-    return await $fetch(`/api/chat/${sessionId}`, {
+    return await $fetchWithAuth(`/api/chat/${sessionId}`, {
       method: 'DELETE',
-      query: { 
+      query: {
         userId: userId.value || undefined,
         anonymousId: anonymousId.value || undefined
       }

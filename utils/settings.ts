@@ -53,6 +53,11 @@ export const DEFAULT_KEYS_STORE: ContextKeys = {
     endpoint: getLocalValue('keys.groq_api_host'),
     proxy: false,
   },
+  opencodeGo: {
+    key: getLocalValue('keys.opencodego_api_key'),
+    endpoint: getLocalValue('keys.opencodego_api_host'),
+    proxy: false,
+  },
   custom: []
 }
 

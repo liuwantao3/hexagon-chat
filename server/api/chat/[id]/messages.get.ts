@@ -17,7 +17,6 @@ export default defineEventHandler(async (event) => {
 
   const id = parseInt(sessionId)
 
-  // Verify access - session must belong to userId or anonymousId
   const session = await prisma.chatSession.findUnique({ where: { id } })
   if (!session) {
     throw createError({ statusCode: 404, message: 'Session not found' })
@@ -29,35 +28,48 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Not authorized' })
   }
 
-  // Query messages by sessionId
   const where: any = { sessionId: id }
+  const take = query.take ? parseInt(query.take as string) : undefined
+  const cursor = query.cursor ? parseInt(query.cursor as string) : undefined
+  const orderBy = query.orderBy === 'asc' ? { startTime: 'asc' as const } : { id: 'desc' as const }
+
+  if (cursor !== undefined) {
+    where.id = { lt: cursor }
+  }
 
   try {
     const messages = await prisma.chatHistory.findMany({
       where,
-      orderBy: { startTime: 'asc' },
+      orderBy,
+      take,
     })
 
-    return messages.map(m => ({
-      id: m.id,
-      sessionId: m.sessionId,
-      message: m.message,
-      startTime: Number(m.startTime),
-      endTime: Number(m.endTime),
-      model: m.model,
-      role: m.role,
-      canceled: m.canceled,
-      failed: m.failed,
-      instructionId: m.instructionId,
-      knowledgeBaseId: m.knowledgeBaseId,
-      relevantDocs: m.relevantDocs ? JSON.parse(m.relevantDocs) : null,
-      toolResult: m.toolResult,
-      toolCallId: m.toolCallId,
-      toolName: m.toolName,
-      toolInput: m.toolInput ? JSON.parse(m.toolInput) : null,
-      toolOutput: m.toolOutput,
-      toolCalls: m.toolCalls ? JSON.parse(m.toolCalls) : null
-    }))
+    const hasMore = messages.length === (take || 20)
+
+    return {
+      messages: messages.map(m => ({
+        id: m.id,
+        sessionId: m.sessionId,
+        message: m.message,
+        startTime: Number(m.startTime),
+        endTime: Number(m.endTime),
+        model: m.model,
+        role: m.role,
+        canceled: m.canceled,
+        failed: m.failed,
+        instructionId: m.instructionId,
+        knowledgeBaseId: m.knowledgeBaseId,
+        relevantDocs: m.relevantDocs ? JSON.parse(m.relevantDocs) : null,
+        toolResult: m.toolResult,
+        toolCallId: m.toolCallId,
+        toolName: m.toolName,
+        toolInput: m.toolInput ? JSON.parse(m.toolInput) : null,
+        toolOutput: m.toolOutput,
+        toolCalls: m.toolCalls ? JSON.parse(m.toolCalls) : null
+      })),
+      hasMore,
+      nextCursor: messages.length > 0 ? messages[messages.length - 1].id : undefined
+    }
   } catch (error: any) {
     console.error('[Chat Messages API] Error:', error)
     throw createError({

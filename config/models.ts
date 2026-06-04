@@ -5,7 +5,8 @@ export const MODEL_FAMILIES = {
   moonshot: 'Moonshot',
   minimax: 'MiniMax',
   gemini: 'Gemini',
-  groq: 'Groq'
+  groq: 'Groq',
+  opencodeGo: 'OpenCode Go'
 }
 
 // OpenAI models will be loaded dynamically
@@ -17,12 +18,8 @@ export function updateOpenAIModels(models: string[]) {
 }
 
 export const AZURE_OPENAI_GPT_MODELS = [
-  "gpt-3.5-turbo",
-  "gpt-35-turbo-16k",
-  "gpt-35-turbo-instruct",
-  "gpt-4",
-  "gpt-4-32k",
-  "gpt-4o"
+  "gpt-4o",
+  "gpt-4o-mini"
 ]
 
 export const OPENAI_EMBEDDING_MODELS = [
@@ -48,27 +45,15 @@ export const ANTHROPIC_MODELS = [
   "claude-instant-1.2"
 ]
 
-export const MOONSHOT_MODELS = [
-  "moonshot-v1-8k",
-  "moonshot-v1-32k",
-  "moonshot-v1-128k",
-  "kimi-k2.5"
-]
+export const MOONSHOT_MODELS: string[] = []
 
 export const MINIMAX_MODELS = [
   "MiniMax-M2.5",
 ]
 
-export const GEMINI_MODELS = [
-  // Gemini 3 (Preview)
-  "gemini-3-pro-preview",
-  "gemini-3-flash-preview",
-  "gemini-3.1-flash-lite-preview",
-  // Gemini 2.5 (Stable)
-  "gemini-2.5-pro",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-]
+export const OPENCODE_GO_MODELS: string[] = []
+
+export const GEMINI_MODELS: string[] = []
 
 export const GROQ_MODELS = [
   "llama-3.1-405b-reasoning",

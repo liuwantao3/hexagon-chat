@@ -23,6 +23,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   edit: [name: string]
   remove: [name: string]
+  'remove-builtin': [name: string]
   test: [name: string]
 }>()
 
@@ -36,6 +37,7 @@ const builtInProviders = [
   { key: 'minimax', name: 'MiniMax', family: 'MiniMax' },
   { key: 'gemini', name: 'Gemini', family: 'Gemini' },
   { key: 'groq', name: 'Groq', family: 'Groq' },
+  { key: 'opencodeGo', name: 'OpenCode Go', family: 'OpenCode Go' },
 ]
 
 const configuredModels = computed<ConfiguredModel[]>(() => {
@@ -169,6 +171,13 @@ function getStatusColor(status: ConfiguredModel['status']) {
                  size="sm"
                  @click="emit('edit', model.name)">
           <UIcon name="i-heroicons-pencil" class="w-4 h-4" />
+        </UButton>
+        <UButton v-if="model.isBuiltIn && model.name !== 'Ollama'" 
+                 variant="ghost" 
+                 color="red"
+                 size="sm"
+                 @click="emit('remove-builtin', model.name)">
+          <UIcon name="i-heroicons-trash" class="w-4 h-4" />
         </UButton>
         <UButton v-if="!model.isBuiltIn" 
                  variant="ghost" 

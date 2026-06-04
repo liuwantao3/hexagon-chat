@@ -4,7 +4,7 @@ import { SocksProxyAgent } from 'socks-proxy-agent'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { type ModelResponse, type ModelDetails } from 'ollama'
-import { MODEL_FAMILIES, OPENAI_GPT_MODELS, ANTHROPIC_MODELS, AZURE_OPENAI_GPT_MODELS, MOONSHOT_MODELS, MINIMAX_MODELS, GEMINI_MODELS, GROQ_MODELS } from '~/config/index'
+import { MODEL_FAMILIES, OPENAI_GPT_MODELS, ANTHROPIC_MODELS, AZURE_OPENAI_GPT_MODELS, MOONSHOT_MODELS, MINIMAX_MODELS, GEMINI_MODELS, GROQ_MODELS, OPENCODE_GO_MODELS } from '~/config/index'
 import { getOllama } from '@/server/utils/ollama'
 
 export interface ModelItem extends Partial<Omit<ModelResponse, 'details'>> {
@@ -335,6 +335,47 @@ export default defineEventHandler(async (event) => {
           name: model,
           details: {
             family: MODEL_FAMILIES.groq
+          }
+        })
+      })
+    }
+  }
+
+  if (keys.opencodeGo?.key) {
+    const config = useRuntimeConfig()
+    const proxyUrl = config.modelProxyUrl
+
+    try {
+      const goUrl = 'https://opencode.ai/zen/go/v1/models'
+      const response = proxyUrl
+        ? await fetchWithProxy(goUrl, proxyUrl, {
+            headers: { 'Authorization': `Bearer ${keys.opencodeGo.key}` }
+          })
+        : await fetch(goUrl, {
+            headers: { 'Authorization': `Bearer ${keys.opencodeGo.key}` }
+          })
+
+      if (response.ok) {
+        const data = await response.json()
+        data.data?.forEach((model: any) => {
+          models.push({
+            name: model.id,
+            details: {
+              family: MODEL_FAMILIES.opencodeGo
+            }
+          })
+        })
+      }
+    } catch (error) {
+      console.error('Failed to fetch OpenCode Go models:', error)
+    }
+
+    if (!models.some(m => m.details?.family === MODEL_FAMILIES.opencodeGo)) {
+      OPENCODE_GO_MODELS.forEach((model) => {
+        models.push({
+          name: model,
+          details: {
+            family: MODEL_FAMILIES.opencodeGo
           }
         })
       })

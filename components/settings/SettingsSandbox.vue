@@ -8,6 +8,7 @@ const sandboxEnabled = useStorage<boolean>('sandboxEnabled', false)
 const sandboxMode = useStorage<'inline' | 'panel'>('sandboxMode', 'inline')
 const autoScreenshot = useStorage<boolean>('autoScreenshot', true)
 const includeConsole = useStorage<boolean>('includeConsole', true)
+const sendEventsToLLM = useStorage<boolean>('sendEventsToLLM', false)
 const visionModel = useStorage<string>('visionModel', '')
 
 const visionModels = computed(() => {
@@ -81,6 +82,13 @@ watch(visionModels, (newModels) => {
 
       <UFormGroup :label="t('settings.sandbox.includeConsole')">
         <UToggle v-model="includeConsole" :disabled="!sandboxEnabled" />
+      </UFormGroup>
+
+      <UFormGroup :label="t('settings.sandbox.sendEventsToLLM')">
+        <UToggle v-model="sendEventsToLLM" :disabled="!sandboxEnabled" />
+        <p class="text-xs text-gray-500 mt-1">
+          {{ t('settings.sandbox.sendEventsToLLMDesc') }}
+        </p>
       </UFormGroup>
     </div>
   </SettingsCard>

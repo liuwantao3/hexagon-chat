@@ -123,6 +123,31 @@ Discovered issue: need to call `prisma.$disconnect()` on shutdown.
 An ORM tool we used in the project.
 ```
 
+### Cross-Reference Requirements
+**CRITICAL**: Cross-references MUST link DIFFERENT entities. Never create self-referencing links (where fromSlug equals toSlug).
+
+For each entity, analyze:
+- Does it USE or DEPEND ON another entity?
+- Is it RELATED TO another entity from this session?
+- Does it CONTRADICT or SUPERSEDE another entity?
+- Is it an ELABORATION of another entity?
+
+Example of CORRECT cross-references:
+```json
+"crossReferences": [
+  {"fromSlug": "nuxt-3", "toSlug": "typescript", "type": "uses", "context": "Nuxt 3 uses TypeScript for type safety"},
+  {"fromSlug": "pinia", "toSlug": "vue-3", "type": "uses", "context": "Pinia is the official state management for Vue 3"},
+  {"fromSlug": "prisma-orm", "toSlug": "sqlite", "type": "uses", "context": "Prisma ORM is configured to use SQLite database"}
+]
+```
+
+Example of WRONG cross-references (self-referencing - DO NOT DO THIS):
+```json
+"crossReferences": [
+  {"fromSlug": "nuxt-3", "toSlug": "nuxt-3", "type": "uses", "context": "Nuxt 3 uses itself"}
+]
+```
+
 ### Confidence Scoring
 - 0.9-1.0: Direct statements, verified facts
 - 0.7-0.9: Clear conclusions from conversation
@@ -141,6 +166,8 @@ Set `depth: "deep-investigation"` for sessions that produced significant discove
 ## Session Analysis Prompt
 
 Analyze the following conversation and generate wiki pages. Be specific and detailed. Include exact file names, code snippets, error messages, and commands where relevant.
+
+**IMPORTANT**: When creating crossReferences array, ensure each reference links to a DIFFERENT entity slug. Self-referencing links (fromSlug === toSlug) are invalid and will be ignored.
 
 Conversation:
 {{CONVERSATION}}

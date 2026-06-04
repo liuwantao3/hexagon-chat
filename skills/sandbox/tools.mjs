@@ -44,6 +44,10 @@ export const sandboxExecuteTool = {
   - Supports interactive elements like buttons, forms, etc.
   - **User interactions are automatically sent back to the LLM as silent messages**
   - Design interactive elements with meaningful 'id' attributes for clear interaction feedback
+  - IMPORTANT: JavaScript runs in a browser iframe, NOT Node.js
+    - DON'T use await import() - libraries are pre-loaded globally
+    - Use window.THREE and window.OrbitControls (already loaded)
+    - Use window.Matter for physics
   - HTML: The HTML structure to render
   - CSS: Optional CSS styles to apply
   - JS: Optional JavaScript code to execute`,
@@ -58,14 +62,31 @@ export const sandboxExecuteTool = {
     required: ['html']
   },
   
-  async execute(input) {
+async execute(input) {
     const { html = '', css = '', js = '' } = input
+    
+    let userJs = js
+    
+    // Remove ALL import statements - catch everything
+    userJs = userJs.replace(/import\s+[^;]*from\s+['"][^'"]*['"];?\s*/gi, '')
+    userJs = userJs.replace(/import\s*\([^)]+\)\s+from\s+['"][^'"]*['"];?\s*/gi, '')
+    userJs = userJs.replace(/await\s+import\s*\([^)]+\);?\s*/gi, '')
+    userJs = userJs.replace(/^import\s+.*$/gm, '')
+    
+    // Wrap code to load Three.js first if it uses THREE
+    if (userJs.includes('THREE') || userJs.includes('OrbitControls') || userJs.includes('scene') || userJs.includes('Scene')) {
+      userJs = `(async () => { await window.initThree(); const THREE = window.THREE; const OrbitControls = window.OrbitControls;\n${userJs}\n})();`
+    }
+    
+    let scriptTag = '';
+    if (userJs) {
+      scriptTag = `<script>${userJs}<\/script>`;
+    }
     
     // Build complete HTML document with CSS, JS, and interaction capture
     let fullHtml = html
     if (css || js) {
       const styleTag = css ? `<style>${css}</style>` : ''
-      const scriptTag = js ? `<script>${js}<\/script>` : ''
       
       // If HTML is a full document, inject into body
       if (html.includes('<html') || html.includes('<head') || html.includes('<body')) {

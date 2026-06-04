@@ -330,21 +330,20 @@ class WikiService {
   }
 
   async createLink(pageIds: number[], ref: CrossReference): Promise<void> {
-    const fromIndex = pageIds.findIndex(id => {
-      return prisma.wikiPage.findUnique({ where: { id } }).then(p => p?.slug === ref.fromSlug)
-    })
-    const toIndex = pageIds.findIndex(id => {
-      return prisma.wikiPage.findUnique({ where: { id } }).then(p => p?.slug === ref.toSlug)
-    })
-
-    if (fromIndex === -1 || toIndex === -1) {
+    if (ref.fromSlug === ref.toSlug) {
       return
     }
 
-    const fromPage = await prisma.wikiPage.findUnique({ where: { id: pageIds[fromIndex] } })
-    const toPage = await prisma.wikiPage.findUnique({ where: { id: pageIds[toIndex] } })
+    const pages = await prisma.wikiPage.findMany({
+      where: { id: { in: pageIds } }
+    })
 
-    if (!fromPage || !toPage) return
+    const fromPage = pages.find(p => p.slug === ref.fromSlug)
+    const toPage = pages.find(p => p.slug === ref.toSlug)
+
+    if (!fromPage || !toPage) {
+      return
+    }
 
     await prisma.pageLink.upsert({
       where: {
@@ -504,7 +503,7 @@ class WikiService {
     })
 
     const contributions = await prisma.wikiPageContribution.findMany({
-      where: { page: { userId } },
+      where: { page: { userId }, source: { id: { not: null } } },
       include: { source: { select: { type: true } } }
     })
 

@@ -5,14 +5,6 @@ const props = defineProps<{
   message: ChatMessage
 }>()
 
-console.log('[ToolCallItem] message received:', {
-  toolResult: props.message.toolResult,
-  toolName: props.message.toolName,
-  toolOutput: props.message.toolOutput?.substring?.(0, 100),
-  content: props.message.content?.substring?.(0, 100),
-  hasImageUrls: props.message.toolOutput?.includes('imageUrls')
-})
-
 const markdown = useMarkdown()
 
 const toolIconMap: Record<string, string> = {
@@ -77,15 +69,10 @@ const isError = computed(() => {
 
 const parsedContent = computed(() => {
   const content = props.message.toolOutput || props.message.content || ''
-  console.log('[ToolCallItem] raw toolOutput:', content.substring(0, 200))
-  console.log('[ToolCallItem] has content field:', !!props.message.content)
   try {
     const parsed = JSON.parse(content)
-    console.log('[ToolCallItem] parsed JSON keys:', Object.keys(parsed))
-    console.log('[ToolCallItem] imageUrls:', parsed.imageUrls?.length)
     return parsed
   } catch (e) {
-    console.log('[ToolCallItem] JSON parse error:', e)
     return null
   }
 })
@@ -132,13 +119,11 @@ const imageError = computed(() => {
 
 // Handle confirmation response
 async function respondToConfirm(response: 'confirmed' | 'denied') {
-  console.log('[ToolCallItem] Responding to confirm:', confirmId.value, response)
   try {
     await $fetch('/api/confirm/respond', {
       method: 'POST',
       body: { confirmId: confirmId.value, response }
     })
-    // Update the UI to show the response
   } catch (e) {
     console.error('[ToolCallItem] Error responding to confirm:', e)
   }

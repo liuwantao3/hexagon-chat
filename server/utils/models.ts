@@ -133,6 +133,15 @@ function initChat(family: string, modelName: string, params: InitChatParams, isC
     })
   }
 
+  if (family === MODEL_FAMILIES.opencodeGo) {
+    const endpoint = params.endpoint || "https://opencode.ai/zen/go/v1"
+    return new ChatOpenAI({
+      model: modelName,
+      apiKey: params.key,
+      configuration: { baseURL: openaiApiFillPath(endpoint) },
+    } as never)
+  }
+
   return null
 }
 

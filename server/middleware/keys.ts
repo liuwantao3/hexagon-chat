@@ -65,6 +65,12 @@ export interface ContextKeys {
     proxy: boolean
     chatSettings?: ChatSettings
   },
+  opencodeGo: {
+    key: string
+    endpoint: string
+    proxy: boolean
+    chatSettings?: ChatSettings
+  },
   /** custom model base on OpenAI API */
   custom: Array<{
     name: string

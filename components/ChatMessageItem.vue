@@ -76,16 +76,13 @@ const isToolResult = computed(() => props.message.toolResult)
 const toolResultContent = computed(() => {
   if (!isToolResult.value) return null
   const content = props.message.content
-  console.log('[ChatMessageItem] toolResultContent raw:', typeof content, content?.substring?.(0, 200))
   try {
     if (typeof content === 'string') {
       const parsed = JSON.parse(content)
-      console.log('[ChatMessageItem] parsed JSON:', parsed)
       return parsed
     }
     return content
   } catch (e) {
-    console.log('[ChatMessageItem] JSON parse error:', e)
     return null
   }
 })
@@ -116,15 +113,11 @@ const svgCode = computed(() => {
 })
 
 const isImageToolResult = computed(() => {
-  const result = toolResultContent.value?.imageUrls && toolResultContent.value.imageUrls.length > 0
-  console.log('[ChatMessageItem] isImageToolResult:', result, 'imageUrls:', toolResultContent.value?.imageUrls?.length)
-  return result
+  return toolResultContent.value?.imageUrls && toolResultContent.value.imageUrls.length > 0
 })
 
 const imageUrls = computed(() => {
-  const urls = toolResultContent.value?.imageUrls || []
-  console.log('[ChatMessageItem] imageUrls computed:', urls.length, urls.map((u: string) => u.substring(0, 50)))
-  return urls
+  return toolResultContent.value?.imageUrls || []
 })
 
 const imageError = computed(() => {

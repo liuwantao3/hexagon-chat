@@ -21,7 +21,7 @@ const ollamaForm = reactive({
 
 const customServers = computed(() => keysStore.value.custom || [])
 
-const builtInProviders = ['openai', 'azureOpenai', 'anthropic', 'moonshot', 'minimax', 'gemini', 'groq']
+const builtInProviders = ['openai', 'azureOpenai', 'anthropic', 'moonshot', 'minimax', 'gemini', 'groq', 'opencodeGo']
 
 onMounted(() => {
   loadOllamaSettings()
@@ -68,6 +68,12 @@ function onRemoveCloudModel(name: string) {
   }
 }
 
+function onRemoveBuiltInProvider(providerKey: string) {
+  (keysStore.value as any)[providerKey] = null
+  loadModels()
+  toast.add({ title: t('settings.removedSuccessfully'), color: 'green' })
+}
+
 function onUpdateBuiltInProvider(providerKey: string, data: any) {
   keysStore.value[providerKey as keyof ContextKeys] = data
   loadModels()
@@ -86,8 +92,8 @@ function openAddModal() {
 
 function openEditModal(name: string) {
   // Check if it's a built-in provider
-  if (builtInProviders.includes(name.toLowerCase()) || 
-      ['OpenAI', 'Azure OpenAI', 'Anthropic', 'Moonshot', 'Gemini', 'Groq'].includes(name)) {
+  const builtInNames = ['OpenAI', 'Azure OpenAI', 'Anthropic', 'Moonshot', 'MiniMax', 'Gemini', 'Groq', 'OpenCode Go']
+  if (builtInProviders.includes(name.toLowerCase()) || builtInNames.includes(name)) {
     const providerKey = name.toLowerCase().replace(' ', '').replace('azure ', 'azure')
     const keyMap: Record<string, string> = {
       'openai': 'openai',
@@ -96,8 +102,9 @@ function openEditModal(name: string) {
       'moonshot': 'moonshot',
       'gemini': 'gemini',
       'groq': 'groq',
+      'opencodego': 'opencodeGo',
     }
-    const providerKeyNormalized = keyMap[name.toLowerCase()] || name.toLowerCase()
+    const providerKeyNormalized = keyMap[providerKey] || providerKey
     
     modal.open(EditBuiltInProvider, {
       providerKey: providerKeyNormalized,
@@ -150,6 +157,7 @@ function onTestConnection(name: string) {
         :models="models"
         @edit="openEditModal"
         @remove="onRemoveCloudModel"
+        @remove-builtin="onRemoveBuiltInProvider"
         @test="onTestConnection"
       />
     </SettingsCard>

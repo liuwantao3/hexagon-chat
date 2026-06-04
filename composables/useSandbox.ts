@@ -19,6 +19,7 @@ export const useSandbox = () => {
   const sandboxMode = useStorage<'inline' | 'panel'>('sandboxMode', 'inline')
   const autoScreenshot = useStorage<boolean>('autoScreenshot', true)
   const includeConsole = useStorage<boolean>('includeConsole', true)
+  const sendEventsToLLM = useStorage<boolean>('sendEventsToLLM', false)
   const visionModel = useStorage<string>('visionModel', '')
   const panelWidth = useStorage<number>('sandboxPanelWidth', 800)
   const consoleHeight = useStorage<number>('sandboxConsoleHeight', 200)
@@ -39,6 +40,7 @@ export const useSandbox = () => {
   const isPanel = computed(() => sandboxMode.value === 'panel')
   const isAutoScreenshot = computed(() => autoScreenshot.value)
   const isIncludeConsole = computed(() => includeConsole.value)
+  const isSendEventsToLLM = computed(() => sendEventsToLLM.value)
   const isOpen = computed(() => isPanelOpen.value)
 
   const updateCode = (type: 'html' | 'css' | 'js', code: string) => {
@@ -78,7 +80,15 @@ export const useSandbox = () => {
     
 if (processedHtml) state.value.html = processedHtml
     if (cssCode) state.value.css = cssCode
-    if (processedJs) state.value.js = processedJs
+    if (processedJs) {
+      // Remove all import statements to prevent module specifier errors
+      let cleanedJs = processedJs
+      cleanedJs = cleanedJs.replace(/import\s+[^;]*from\s+['"][^'"]*['"];?\s*/gi, '')
+      cleanedJs = cleanedJs.replace(/import\s*\([^)]+\)\s+from\s+['"][^'"]*['"];?\s*/gi, '')
+      cleanedJs = cleanedJs.replace(/await\s+import\s*\([^)]+\);?\s*/gi, '')
+      cleanedJs = cleanedJs.replace(/^import\s+.*$/gm, '')
+      state.value.js = cleanedJs
+    }
     
     // Only open panel in panel mode, not in inline mode
     // In inline mode, HTML is displayed in chat via ToolCallItem
@@ -147,6 +157,39 @@ if (processedHtml) state.value.html = processedHtml
 <body>
   ${state.value.html}
   <script>
+    // Three.js + OrbitControls loader with ready check
+    window.initThree = async () => {
+      if (window.THREE) return window.THREE;
+      const THREE = await import('https://unpkg.com/three@0.170.0/build/three.module.js');
+      const { OrbitControls } = await import('https://unpkg.com/three@0.170.0/examples/jsm/controls/OrbitControls.js');
+      window.THREE = THREE;
+      window.OrbitControls = OrbitControls;
+      console.log('[Three.js] Ready');
+      return THREE;
+    };
+    
+    // Wait for libraries to be ready, then run user code
+    window.runUserCode = async (userJs) => {
+      if (!window.THREE) {
+        await window.initThree();
+      }
+      try {
+        eval(userJs);
+      } catch(e) { console.error(e.message); }
+    };
+    
+    console.log('[Three.js] Call window.initThree() if needed | [Matter.js] as window.Matter');
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+  <script>
+
+    // Auto-create canvas for Three.js if user uses it
+    if (!document.getElementById('canvas-container')) {
+      const container = document.createElement('div');
+      container.id = 'canvas-container';
+      document.body.appendChild(container);
+    }
+    
     (function() {
       const originalLog = console.log;
       const originalWarn = console.warn;
@@ -181,35 +224,41 @@ if (processedHtml) state.value.html = processedHtml
         sendToParent('sandbox-console', { level: 'error', message: msg + ' (line ' + line + ')' });
       };
 
-      // User interaction capture
+      // User interaction capture - only button clicks, no key/input events
       document.addEventListener('click', function(e) {
         const target = e.target;
         const tagName = target.tagName.toLowerCase();
         const id = target.id || '';
         const className = target.className || '';
         const text = target.textContent || '';
+        const type = target.type || '';
+
+        // For submit buttons, capture input values from the form
+        let inputValues = '';
+        if (type === 'submit' || tagName === 'button') {
+          const form = target.form;
+          if (form) {
+            const inputs = form.querySelectorAll('input[type="text"], input[type="password"], input[type="email"], input[type="url"], input[type="tel"], input[type="search"], textarea');
+            const capturedValues = [];
+            inputs.forEach(input => {
+              if (input.value) {
+                capturedValues.push(input.value);
+              }
+            });
+            if (capturedValues.length > 0) {
+              inputValues = capturedValues.join(', ');
+            }
+          }
+        }
+
         sendToParent('sandbox-interaction', { 
           event: 'click', 
           tag: tagName, 
           id: id, 
           class: className,
-          text: text.substring(0, 50)
+          text: text.substring(0, 50),
+          inputValues: inputValues
         });
-      }, true);
-
-      document.addEventListener('input', function(e) {
-        const target = e.target;
-        sendToParent('sandbox-interaction', { 
-          event: 'input', 
-          tag: target.tagName.toLowerCase(),
-          id: target.id || '',
-          value: target.value ? target.value.substring(0, 50) : ''
-        });
-      }, true);
-
-      document.addEventListener('submit', function(e) {
-        sendToParent('sandbox-interaction', { event: 'submit' });
-        e.preventDefault();
       }, true);
     })();
   <\/script>
@@ -236,9 +285,13 @@ if (processedHtml) state.value.html = processedHtml
     } else if (event.data?.type === 'sandbox-interaction') {
       // Log user interaction to console
       const interaction = event.data
+      let logMessage = `[${interaction.event}] ${interaction.tag}${interaction.id ? '#' + interaction.id : ''} ${interaction.text || ''}`.trim();
+      if (interaction.inputValues) {
+        logMessage += ` [input: ${interaction.inputValues}]`;
+      }
       consoleLogs.value.push({
         level: 'log',
-        message: `[${interaction.event}] ${interaction.tag}${interaction.id ? '#' + interaction.id : ''} ${interaction.text || ''}`.trim(),
+        message: logMessage,
         timestamp: Date.now()
       })
       
@@ -303,6 +356,7 @@ if (processedHtml) state.value.html = processedHtml
   const setIframeRef = (el: HTMLIFrameElement | null) => {
     if (el) {
       iframeRef.value = el
+      lastRenderedHtml = ''
       window.addEventListener('message', handleConsoleMessage)
       
       if (state.value.html || state.value.css || state.value.js) {
@@ -356,6 +410,7 @@ if (processedHtml) state.value.html = processedHtml
     sandboxMode,
     autoScreenshot,
     includeConsole,
+    sendEventsToLLM,
     visionModel,
     panelWidth,
     consoleHeight,
@@ -365,6 +420,7 @@ if (processedHtml) state.value.html = processedHtml
     isPanel,
     isAutoScreenshot,
     isIncludeConsole,
+    isSendEventsToLLM,
     isOpen,
     state,
     consoleLogs,

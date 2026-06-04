@@ -272,21 +272,12 @@ const normalizeMessages = (messages: RequestBody['messages']): BaseMessage[] => 
 }
 
 export default defineEventHandler(async (event) => {
-    console.log('🔵 ======================================== [CHAT-API-START] ========================================')
     try {
         const body = await readBody(event)
         const { knowledgebaseId, model, family, messages, stream, skills, sessionId, userId, anonymousId } = body
-
-        console.log('🔵 [CHAT-API] body keys:', Object.keys(body))
-        console.log('🔵 [CHAT-API] sessionId:', sessionId, 'userId:', userId, 'anonymousId:', anonymousId)
         
-        // Save user message to database
-        console.log('🔵 [CHAT-API] Checking save - sessionId:', sessionId, 'userId:', userId, 'anonymousId:', anonymousId)
-        
-        // Try to save user message - use session info if no user info
         if (sessionId) {
             const lastMessage = messages?.filter(m => m.role === 'user').pop()
-            console.log('🔵 [CHAT-API] User message:', lastMessage?.content?.substring(0, 50))
             if (lastMessage) {
                 const now = Date.now()
                 try {
@@ -308,10 +299,8 @@ export default defineEventHandler(async (event) => {
                         }
                     })
                     const existingSession = await prisma.chatSession.findUnique({ where: { id: sessionId }, select: { title: true } })
-                    const needsTitle = existingSession?.title === null || existingSession?.title === 'New Chat'
-                    console.log('🔵 [CHAT-API] existingSession:', existingSession, 'needsTitle:', needsTitle)
+                    const needsTitle = !existingSession?.title || existingSession?.title === 'New Chat' || existingSession?.title === '新建对话' || existingSession?.title.length <= 3
                     const titleUpdate = needsTitle ? { title: lastMessage.content.substring(0, 50) } : {}
-                    console.log('🔵 [CHAT-API] Title update:', titleUpdate)
                     
                     await prisma.chatSession.update({
                         where: { id: sessionId },
@@ -321,7 +310,6 @@ export default defineEventHandler(async (event) => {
                             ...titleUpdate
                         }
                     })
-                    console.log('🔵 [CHAT-API] User message saved')
                 } catch (e) {
                     console.log('🔵 [CHAT-API] Failed to save user message:', e)
                 }
@@ -329,13 +317,11 @@ export default defineEventHandler(async (event) => {
         }
         
         if (knowledgebaseId) {
-            console.log("Chat with knowledge base with id: ", knowledgebaseId)
             const knowledgebase = await prisma.knowledgeBase.findUnique({
                 where: {
                     id: knowledgebaseId,
                 },
             })
-            console.log(`Knowledge base ${knowledgebase?.name} with embedding "${knowledgebase?.embedding}"`)
             if (!knowledgebase) {
                 setResponseStatus(event, 404, `Knowledge base with id ${knowledgebaseId} not found`)
                 return

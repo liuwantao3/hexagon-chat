@@ -9,6 +9,39 @@ examples:
   - "Create an interactive text adventure game with choice buttons"
 ---
 
+## Runtime Environment
+
+Your JavaScript code runs in a **browser iframe** - NOT Node.js. This means:
+
+### ❌ Don't Use
+- Node.js APIs (`require`, `fs`, `path`, `process`, etc.)
+- `import()` or `import ... from` statements
+- `__dirname`, `__filename`
+- ES module syntax (`export`, `export default`)
+
+### ✅ Available (Pre-loaded)
+- `window.THREE` - Three.js for 3D graphics
+- `window.OrbitControls` - Camera controls for Three.js  
+- `window.Matter` - 2D physics engine
+
+### Writing Code (Three.js example)
+```javascript
+// Your code is automatically wrapped to load libraries first
+// Just use THREE directly:
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, 800/600, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer();
+document.body.appendChild(renderer.domElement);
+
+// ... rest of your game code
+```
+
+### How to Use Matter.js (2D Physics)
+```javascript
+const { Engine, Render, World, Bodies } = Matter;
+// ...
+```
+
 ## Interaction Feedback
 
 When you create interactive content (buttons, forms, inputs), user interactions are automatically sent to you as silent messages. The LLM receives these interactions and can respond accordingly.

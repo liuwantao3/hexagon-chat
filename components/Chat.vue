@@ -37,8 +37,6 @@ const serverChat = useServerChat()
 
 const currentUserId = computed(() => data.value?.id)
 
-console.log('[Chat] Auth data:', data.value, 'deviceId:', deviceId.value)
-
 const supportsVision = computed(() => {
   if (models.value.length === 0) return false
   return modelSupportsVision(models.value[0])
@@ -103,17 +101,11 @@ let lastSandboxUpdate = 0
 
 // Sandbox - handle tool results and message content
 const handleSandboxCode = (content: string, isToolResult?: boolean) => {
-  console.log('[Sandbox] handleSandboxCode called, isToolResult:', isToolResult, 'content length:', content?.length)
-  
-  // Only process if sandbox is enabled in settings
   if (!sandbox?.isEnabled?.value) {
-    console.log('[Sandbox] Sandbox not enabled')
     return false
   }
   
-  // In inline mode, HTML is displayed via ToolCallItem, not the sandbox panel
   if (sandbox?.isInline?.value) {
-    console.log('[Sandbox] Inline mode - let ToolCallItem handle display')
     return false
   }
   
@@ -121,22 +113,16 @@ const handleSandboxCode = (content: string, isToolResult?: boolean) => {
     return false
   }
   
-  // Try to parse as JSON first
   try {
     const data = JSON.parse(content)
-    console.log('[Sandbox] Content parsed as JSON, keys:', Object.keys(data))
     
-    // Check for sandbox tool result format (has html/css/js fields)
     if (data.html || data.code || data.js || data.js_code || data.css) {
-      // Debounce: don't update if we just updated
       const now = Date.now()
       if (now - lastSandboxUpdate < 500) {
-        console.log('[Sandbox] Skipping duplicate update')
         return true
       }
       lastSandboxUpdate = now
       
-      console.log('[Sandbox] Found code in JSON! html length:', data.html?.length, 'css:', data.css?.length, 'js:', data.js?.length)
       sandbox.updateFromCodeBlocks(
         data.html || '',
         data.css || '',
@@ -148,21 +134,17 @@ const handleSandboxCode = (content: string, isToolResult?: boolean) => {
     // Not JSON, try markdown code blocks
   }
   
-  // Try markdown code blocks
   const { htmlCode, cssCode, jsCode } = extractCodeBlocks(content)
   if (htmlCode || cssCode || jsCode) {
     const now = Date.now()
     if (now - lastSandboxUpdate < 500) {
-      console.log('[Sandbox] Skipping duplicate update')
       return true
     }
     lastSandboxUpdate = now
-    console.log('[Sandbox] Found code in markdown blocks')
     sandbox.updateFromCodeBlocks(htmlCode, cssCode, jsCode)
     return true
   }
   
-  console.log('[Sandbox] No code found to render')
   return false
 }
 
@@ -272,8 +254,9 @@ useMutationObserver(messageListEl, useThrottleFn((e: MutationRecord[]) => {
 async function loadChatHistory(sessionId?: number) {
   if (typeof sessionId === 'number' && sessionId > 0) {
     const res = await serverChat.getSessionMessages(sessionId)
+    const messageList = (res as any).messages || res
 
-    const filtered = (res as any[]).slice(-limitHistorySize.value).map(el => {
+    const filtered = messageList.slice(-limitHistorySize.value).map(el => {
       const inferredRole = el.toolResult === true ? 'user' : (el.role || 'assistant')
       return {
         id: el.id,
@@ -299,8 +282,6 @@ async function loadChatHistory(sessionId?: number) {
     })
 
     filtered.sort((a, b) => (a.id || 0) - (b.id || 0))
-    console.log('[loadChatHistory] FINAL messages:')
-    filtered.forEach((m, i) => console.log(`  [${i}] role:${m.role} model:'${m.model}' toolResult:${m.toolResult} content:${String(m.content).substring(0, 30)}`))
     return filtered
   }
   return []
@@ -385,15 +366,12 @@ const onSend = async (data: ChatBoxFormData) => {
           anonymousId: currentUserId.value ? undefined : deviceId.value,
         },
       })
-      console.log('[Chat] Sending to worker - data:', data, 'data.value:', data?.value, 'userId:', currentUserId.value, 'deviceId:', deviceId.value)
     }
   })
 }
 
 const sendSilentInteraction = (interaction: { event: string, tag?: string, id?: string, text?: string, value?: string }) => {
   if (!sessionInfo.value?.id || sendingCount.value > 0 || !models.value.length) {
-    console.log('[Chat] Skipping silent interaction - no session or already sending')
-    return
   }
 
   const timestamp = Date.now()
@@ -412,7 +390,6 @@ const sendSilentInteraction = (interaction: { event: string, tag?: string, id?: 
   }
 
   const content = formatInteraction()
-  console.log('[Chat] Sending silent interaction:', content)
 
   sendingCount.value = models.value.length
 
@@ -467,11 +444,9 @@ onReceivedMessage(data => {
 
   switch (data.type) {
     case 'error':
-      console.log('[Chat] Error received')
       updateMessage(data, { id: data.id, content: data.message, type: 'error' })
       break
     case 'message':
-      console.log('[Chat] Message received from worker, role:', data.data?.role, 'toolName:', data.data?.toolName)
       // Only increment if this is the first message (streaming starting)
       if (sendingCount.value === 0) sendingCount.value += 1
       updateMessage(data, { type: undefined, ...data.data })
@@ -483,8 +458,6 @@ onReceivedMessage(data => {
       const toolOutput = data.data?.toolOutput
       const toolCalls = data.data?.toolCalls
       const msgContent = data.data?.content || data.data?.message?.content || ''
-      
-      console.log('[Chat] Message received, isToolResult:', isToolResult, 'toolCallId:', toolCallId, 'toolName:', toolName, 'toolCalls:', toolCalls?.length, 'content length:', msgContent?.length)
       
       if (msgContent) {
         handleSandboxCode(msgContent, isToolResult)
@@ -498,14 +471,20 @@ onReceivedMessage(data => {
       updateMessage(data, { type: undefined, ...data.data })
       break
     case 'flow_complete':
-      console.log('[Chat] Flow complete signal received')
-      // Don't decrement here - we rely on 'complete' event
       break
     case 'complete':
-      console.log('[Chat] Received complete event, current sendingCount:', sendingCount.value)
       sendingCount.value = Math.max(0, sendingCount.value - 1)
-      console.log('[Chat] After decrement:', sendingCount.value)
+      refreshAfterComplete()
       break
+
+  async function refreshAfterComplete() {
+    const sessions = await serverChat.getSessions()
+    const updated = (sessions as any[]).find(s => s.id === props.sessionId)
+    if (updated) {
+      emits('update-session', props.sessionId!, updated)
+    }
+    initData(props.sessionId!)
+  }
     case 'abort':
       updateMessage(data, { type: 'canceled' })
       break
@@ -521,7 +500,6 @@ onMounted(async () => {
   initData(props.sessionId)
 
   sandbox.onInteraction((interaction) => {
-    console.log('[Chat] Sandbox interaction received from panel:', interaction)
     sendSilentInteraction(interaction)
   })
 
@@ -571,7 +549,6 @@ function updateMessage(data: WorkerSendMessage, newData: Partial<ChatMessage>) {
   if (index > -1) {
     messages.value.splice(index, 1, { ...messages.value[index], ...newData })
   } else {
-    console.log('[Chat] updateMessage - pushing new, id:', data.id, 'role:', newData.role)
     messages.value.push(newData as ChatMessage)
   }
 }

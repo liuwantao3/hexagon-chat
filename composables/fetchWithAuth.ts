@@ -1,22 +1,24 @@
 export const fetchWithAuth: typeof fetch = (request, opts?) => {
   const { token } = useAuth()
+  const headers: any = { ...opts?.headers }
+  if (token.value) {
+    headers.Authorization = token.value
+  }
   return fetch(request, {
     ...opts,
-    headers: {
-      ...opts?.headers,
-      Authorization: token.value!,
-    }
+    headers
   })
 }
 
 function _fetchWithAuth(request: any, opts?: any) {
   const { token } = useAuth()
+  const headers: any = { ...opts?.headers }
+  if (token.value) {
+    headers.Authorization = token.value
+  }
   return $fetch(request, {
     ...opts,
-    headers: {
-      ...opts?.headers,
-      Authorization: token.value!,
-    }
+    headers
   })
 }
 

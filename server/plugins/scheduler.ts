@@ -1,16 +1,9 @@
 import { wikiService } from '../services/wiki'
 import prisma from '../utils/prisma'
 
-const HOURS_BETWEEN_RUNS = 20
-const DAILY_INGEST_HOUR = 12
+const DAILY_INGEST_HOUR = 0
 
 async function runWikiIngest() {
-  const currentHour = new Date().getHours()
-
-  if (currentHour !== DAILY_INGEST_HOUR) {
-    return
-  }
-
   console.log('[Wiki Scheduler] Starting daily wiki ingest...')
 
   try {
@@ -27,14 +20,6 @@ async function runWikiIngest() {
 
         if (!config.enabled || !config.autoIngest) {
           continue
-        }
-
-        if (config.lastIngest) {
-          const hoursSinceLastIngest = (Date.now() - config.lastIngest.getTime()) / (1000 * 60 * 60)
-          if (hoursSinceLastIngest < HOURS_BETWEEN_RUNS) {
-            console.log(`[Wiki Scheduler] Skipping user ${user.id} - ran ${hoursSinceLastIngest.toFixed(1)} hours ago`)
-            continue
-          }
         }
 
         console.log(`[Wiki Scheduler] Processing user ${user.id}`)
@@ -109,16 +94,25 @@ async function runWikiIngest() {
 
 let schedulerInterval: NodeJS.Timeout | null = null
 
-export default defineNitroPlugin(() => {
-  const checkAndRun = async () => {
+async function checkAndRun() {
+  const currentHour = new Date().getHours()
+  const currentDate = new Date().toDateString()
+  const lastRunDate = globalThis.wikiSchedulerLastRunDate
+
+  if (currentHour >= DAILY_INGEST_HOUR && lastRunDate !== currentDate) {
+    globalThis.wikiSchedulerLastRunDate = currentDate
     try {
       await runWikiIngest()
     } catch (error) {
       console.error('[Wiki Scheduler] Run error:', error)
     }
   }
+}
 
-  schedulerInterval = setInterval(checkAndRun, 60 * 60 * 1000)
+export default defineNitroPlugin(() => {
+  checkAndRun()
 
-  console.log('[Wiki Scheduler] Plugin initialized - runs daily at 12pm')
+  schedulerInterval = setInterval(checkAndRun, 15 * 60 * 1000)
+
+  console.log('[Wiki Scheduler] Plugin initialized - checks every 15min, runs after midnight')
 })

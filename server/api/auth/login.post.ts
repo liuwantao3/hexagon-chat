@@ -61,23 +61,27 @@ export default eventHandler(async (event) => {
   }
 
   const accessToken = jwt.sign({ ...user, scope: ['test', 'user'] }, SECRET, { expiresIn })
+
+  await prisma.user.update({
+    where: { id: userRecord.id },
+    data: {
+      access_token: accessToken,
+      last_login: new Date()
+    }
+  })
+
   refreshTokens[refreshToken] = {
     accessToken,
     user
   }
 
-  // Merge anonymous sessions if anonymousId provided
   const anonymousId = event.headers.get('x-anonymous-id')
-  console.log(`[Login] anonymousId from header: ${anonymousId}`)
   if (anonymousId) {
     try {
-      const mergedCount = await chatService.mergeAnonymousSessions(user.id, anonymousId)
-      console.log(`[Login] Merged ${mergedCount} sessions for user ${user.id}`)
+      await chatService.mergeAnonymousSessions(user.id, anonymousId)
     } catch (e) {
       console.error('[Login] Error merging anonymous data:', e)
     }
-  } else {
-    console.log('[Login] No anonymousId header, skipping merge')
   }
 
   return {
